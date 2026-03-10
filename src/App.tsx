@@ -15,7 +15,12 @@ import {
   Users,
   Star,
   Globe,
-  Rocket
+  Rocket,
+  BrainCircuit,
+  ShieldCheck,
+  Cloud,
+  ChevronLeft,
+  GraduationCap
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -31,560 +36,429 @@ import {
   CartesianGrid,
   Cell
 } from 'recharts';
+import { CareerPathType, UserProfile } from './types';
+import { CAREER_PATHS, QUESTIONS_BY_PATH, ROADMAPS, INDUSTRY_TRENDS } from './data/careerData';
 import './index.css';
 
-// Mock Data
-const userProfile = {
-  name: "Alex Dev",
-  currentRole: "Junior Frontend Developer",
-  aspiration: "Senior Full Stack Engineer",
-  currentSkills: {
-    "React": 85,
-    "TypeScript": 70,
-    "Node.js": 45,
-    "System Design": 25,
-    "Cloud/AWS": 20,
-    "Database": 55
-  } as Record<string, number>
-};
-
-const requiredSkills: Record<string, number> = {
-  "React": 95,
-  "TypeScript": 90,
-  "Node.js": 85,
-  "System Design": 80,
-  "Cloud/AWS": 75,
-  "Database": 80
-};
-
-const industryTrends = [
-  { name: 'AI/ML Integration', demand: 98, color: 'var(--accent-primary)' },
-  { name: 'Cloud Native', demand: 92, color: 'var(--accent-secondary)' },
-  { name: 'Distributed Systems', demand: 85, color: 'var(--accent-tertiary)' },
-  { name: 'Serverless', demand: 78, color: 'var(--accent-quaternary)' },
-  { name: 'DevSecOps', demand: 72, color: 'var(--status-warning)' }
-];
-
-const learningPaths = [
-  {
-    id: 1,
-    title: "Advanced System Design for Scale",
-    provider: "SkillBridge Premium",
-    duration: "4 weeks",
-    matchScore: 98,
-    skills: ["System Design", "Cloud/AWS"],
-    type: "Expert Course",
-    difficulty: "Advanced"
-  },
-  {
-    id: 2,
-    title: "Node.js Microservices Masterclass",
-    provider: "Industry Leaders",
-    duration: "6 weeks",
-    matchScore: 92,
-    skills: ["Node.js", "Database"],
-    type: "Specialization",
-    difficulty: "Intermediate"
-  },
-  {
-    id: 3,
-    title: "AWS Certified Solutions Architect",
-    provider: "Amazon Web Services",
-    duration: "12 weeks",
-    matchScore: 89,
-    skills: ["Cloud/AWS"],
-    type: "Certification",
-    difficulty: "Advanced"
-  }
-];
-
+// --- STYLES & VARIANTS ---
 const containerVariants = {
   hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1
-    }
-  }
+  visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
 };
 
 const itemVariants = {
   hidden: { y: 20, opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: { type: 'spring', stiffness: 100 }
-  }
+  visible: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 100 } }
 };
+
+// --- COMPONENTS ---
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mounted, setMounted] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
+  const [view, setView] = useState<'onboarding' | 'assessment' | 'main'>('onboarding');
+
+  // User State
+  const [user, setUser] = useState<UserProfile>({
+    name: '',
+    education: '',
+    goal: 'software-dev',
+    experienceLevel: 'beginner',
+    skills: {
+      "Fundamentals": 0,
+      "Core Skills": 0,
+      "Advanced Concepts": 0,
+      "Tools": 0,
+      "Industry Prep": 0
+    }
+  });
+
+  // Assessment State
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [score, setScore] = useState(0);
 
   useEffect(() => {
     setMounted(true);
-    const timer = setTimeout(() => {
-      setShowSplash(false);
-    }, 4500);
+    const timer = setTimeout(() => setShowSplash(false), 3000);
     return () => clearTimeout(timer);
   }, []);
 
-  const radarData = Object.keys(requiredSkills).map(skill => ({
-    skill,
-    current: userProfile.currentSkills[skill],
-    required: requiredSkills[skill],
-    fullMark: 100,
-  }));
+  // --- Handlers ---
 
-  const overallProgress = Math.round(
-    Object.keys(requiredSkills).reduce((acc, curr) =>
-      acc + (userProfile.currentSkills[curr] / requiredSkills[curr]) * 100
-      , 0) / Object.keys(requiredSkills).length
+  const handleStartOnboarding = (name: string, education: string, goal: CareerPathType) => {
+    setUser(prev => ({ ...prev, name, education, goal }));
+    setView('assessment');
+  };
+
+  const handleAssessmentComplete = (finalScore: number) => {
+    // Generate initial skills based on assessment
+    const baseValue = (finalScore / 3) * 80;
+    const newSkills = {
+      "Fundamentals": baseValue + 10,
+      "Core Skills": baseValue,
+      "Advanced Concepts": baseValue - 20 < 0 ? 5 : baseValue - 20,
+      "Tools": 40,
+      "Industry Prep": 10
+    };
+    setUser(prev => ({ ...prev, skills: newSkills }));
+    setView('main');
+    setActiveTab('dashboard');
+  };
+
+  // --- Views ---
+
+  const SplashView = () => (
+    <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-dark)', overflow: 'hidden', position: 'fixed', inset: 0, zIndex: 10000 }}>
+      <div className="bg-mesh"></div>
+      <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 1 }} style={{ textAlign: 'center' }}>
+        <motion.div
+          animate={{ rotate: 360, boxShadow: ['0 0 20px var(--accent-glow)', '0 0 50px var(--accent-glow)', '0 0 20px var(--accent-glow)'] }}
+          transition={{ rotate: { duration: 20, repeat: Infinity, ease: 'linear' }, boxShadow: { duration: 3, repeat: Infinity } }}
+          style={{ width: '120px', height: '120px', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))', borderRadius: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 2rem' }}
+        >
+          <BrainCircuit size={64} color="white" />
+        </motion.div>
+        <h1 style={{ fontSize: '3.5rem', fontWeight: 800, background: 'linear-gradient(to bottom, #fff, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>SkillBridge AI</h1>
+        <p className="text-muted mt-2" style={{ letterSpacing: '4px', textTransform: 'uppercase', fontSize: '0.9rem' }}>Align Your Aspiration</p>
+      </motion.div>
+    </div>
   );
 
-  if (showSplash) {
+  const OnboardingView = () => {
+    const [name, setName] = useState('');
+    const [education, setEducation] = useState('');
+    const [goal, setGoal] = useState<CareerPathType>('software-dev');
+
     return (
-      <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-dark)', overflow: 'hidden', position: 'fixed', inset: 0, zIndex: 10000 }}>
-        <div className="bg-mesh"></div>
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2.5rem' }}
-        >
-          <div style={{ position: 'relative' }}>
-            <motion.div
-              animate={{
-                rotate: 360,
-                boxShadow: ['0 0 20px var(--accent-glow)', '0 0 50px var(--accent-glow)', '0 0 20px var(--accent-glow)']
-              }}
-              transition={{ rotate: { duration: 20, repeat: Infinity, ease: 'linear' }, boxShadow: { duration: 3, repeat: Infinity } }}
-              style={{ width: '140px', height: '140px', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))', borderRadius: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              <Compass size={80} color="white" />
-            </motion.div>
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 1, type: 'spring' }}
-              style={{ position: 'absolute', right: -15, top: -15, background: 'var(--status-success)', padding: '8px', borderRadius: '50%', border: '4px solid var(--bg-dark)', color: 'white' }}
-            >
-              <CheckCircle2 size={24} />
-            </motion.div>
-          </div>
-
-          <div className="text-center">
-            <motion.h1
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              style={{ fontSize: '4rem', fontWeight: 800, letterSpacing: '-2px', background: 'linear-gradient(to bottom, #fff, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
-            >
-              SkillBridge AI
-            </motion.h1>
-            <motion.p
-              initial={{ y: 10, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.8 }}
-              className="text-muted mt-2"
-              style={{ letterSpacing: '6px', textTransform: 'uppercase', fontSize: '1rem', fontWeight: 500 }}
-            >
-              Your Career, Reimagined.
-            </motion.p>
-          </div>
-
-          <div style={{ width: '300px', height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '10px', overflow: 'hidden', marginTop: '1rem' }}>
-            <motion.div
-              initial={{ width: '0%' }}
-              animate={{ width: '100%' }}
-              transition={{ duration: 4, ease: 'easeInOut' }}
-              style={{ height: '100%', background: 'linear-gradient(90deg, var(--accent-primary), var(--accent-secondary), var(--accent-tertiary))' }}
-            ></motion.div>
-          </div>
-
-          <motion.button
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 2.5 }}
-            className="btn btn-secondary mt-8"
-            onClick={() => setShowSplash(false)}
-          >
-            Launch Intelligence
-          </motion.button>
-        </motion.div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="app-wrapper min-h-screen relative">
-      <div className="bg-mesh"></div>
-
-      {/* Premium Navigation */}
-      <nav className="glass-panel" style={{ position: 'sticky', top: 0, zIndex: 100, borderRadius: 0, borderTop: 'none', borderLeft: 'none', borderRight: 'none', background: 'rgba(2, 6, 23, 0.8)' }}>
-        <div className="container flex items-center justify-between" style={{ height: '80px' }}>
-          <motion.div
-            initial={{ x: -20, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            className="flex items-center gap-3 cursor-pointer"
-            onClick={() => setActiveTab('dashboard')}
-          >
-            <div className="badge-primary" style={{ padding: '8px', borderRadius: '12px' }}>
-              <Compass size={28} className="text-accent-primary" />
-            </div>
-            <span className="font-bold text-2xl" style={{ letterSpacing: '-1px' }}>SkillBridge <span className="text-accent-primary">AI</span></span>
+      <motion.div variants={containerVariants} initial="hidden" animate="visible" className="container max-w-2xl mt-20">
+        <div className="card glass-panel p-10">
+          <motion.div variants={itemVariants} className="text-center mb-10">
+            <GraduationCap size={48} className="text-accent-primary mx-auto mb-4" />
+            <h2 className="text-3xl font-bold mb-2">Build Your Career DNA</h2>
+            <p className="text-muted">Tell us who you are, and where you want to go.</p>
           </motion.div>
 
-          <div className="flex gap-2">
-            {[
-              { id: 'dashboard', icon: Target, label: 'Dashboard' },
-              { id: 'path', icon: Map, label: 'Roadmap' },
-              { id: 'recommendations', icon: BookOpen, label: 'Learning' }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                className={`btn ${activeTab === tab.id ? 'btn-primary' : 'btn-icon'}`}
-                style={{ borderRadius: '12px', padding: activeTab === tab.id ? '0.75rem 1.25rem' : '0.75rem' }}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                <tab.icon size={20} />
-                <span className={activeTab === tab.id ? 'block' : 'hidden'}>{tab.label}</span>
-              </button>
-            ))}
-          </div>
-
-          <motion.div
-            initial={{ x: 20, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            className="flex items-center gap-4"
-          >
-            <div className="text-right hidden-mobile">
-              <div className="font-bold text-sm">{userProfile.name}</div>
-              <div className="text-xs text-muted flex items-center gap-1 justify-end">
-                <Star size={10} className="text-status-warning" /> PRO Account
-              </div>
-            </div>
-            <div className="avatar glow-effect" style={{ width: '45px', height: '45px', borderRadius: '16px', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1.1rem', color: 'white' }}>
-              AD
-            </div>
-          </motion.div>
-        </div>
-      </nav>
-
-      {/* Main Content Area */}
-      <main className="container" style={{ padding: '3rem 1.5rem' }}>
-        <AnimatePresence mode="wait">
-          {activeTab === 'dashboard' && (
-            <motion.div
-              key="dashboard"
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-              exit={{ opacity: 0, y: -20 }}
-              className="grid grid-cols-12 gap-6"
-            >
-              {/* Header Card */}
-              <motion.div variants={itemVariants} className="col-span-12 flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-4xl font-extrabold mb-2">Welcome back, Alex.</h2>
-                  <p className="text-muted flex items-center gap-2">
-                    Target: <span className="text-main font-semibold px-2 py-0.5 rounded-lg bg-white/5">{userProfile.aspiration}</span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent-primary animate-pulse"></span>
-                    <span className="text-accent-primary font-medium">Tracking Optimal Path</span>
-                  </p>
-                </div>
-                <div className="badge-primary flex items-center gap-2 px-6 py-3 rounded-2xl shadow-lg border-white/10">
-                  <Rocket size={20} className="animate-float" />
-                  <div className="text-left">
-                    <div className="text-[10px] uppercase tracking-widest font-bold opacity-60">Intelligence Status</div>
-                    <div className="text-sm font-bold">Active & Optimizing</div>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Readiness Score Card */}
-              <motion.div variants={itemVariants} className="col-span-12 lg:col-span-4 card glass-panel shimmer">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl flex items-center gap-2"><Target className="text-accent-secondary" /> Readiness</h3>
-                  <span className="text-xs font-bold text-accent-secondary bg-accent-secondary/10 px-2 py-1 rounded-md">+4.2% this week</span>
-                </div>
-
-                <div className="flex flex-col items-center justify-center py-6">
-                  <div style={{ position: 'relative', width: '200px', height: '200px' }}>
-                    <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
-                      <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
-                      <motion.circle
-                        cx="50" cy="50" r="45"
-                        fill="none"
-                        stroke="var(--accent-primary)"
-                        strokeWidth="8"
-                        strokeDasharray="282.7"
-                        initial={{ strokeDashoffset: 282.7 }}
-                        animate={{ strokeDashoffset: 282.7 - (282.7 * overallProgress) / 100 }}
-                        transition={{ duration: 2, ease: "easeOut" }}
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ fontSize: '3.5rem', fontWeight: 900, color: 'white' }}>{overallProgress}%</span>
-                      <span className="text-xs uppercase tracking-[3px] text-muted -mt-2">Global Match</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4 mt-4">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted">Current Level</span>
-                    <span className="font-bold">Intermediate</span>
-                  </div>
-                  <div className="progress-bar"><div className="progress-fill" style={{ width: `${overallProgress}%` }}></div></div>
-                  <p className="text-xs text-muted leading-relaxed text-center italic">
-                    "Focusing on System Design will increase your score by 12 points."
-                  </p>
-                  <button className="btn btn-primary w-full shadow-lg" onClick={() => setActiveTab('recommendations')}>
-                    Close Skill Gaps <ChevronRight size={16} />
-                  </button>
-                </div>
-              </motion.div>
-
-              {/* Radar Chart Card */}
-              <motion.div variants={itemVariants} className="col-span-12 lg:col-span-8 card glass-panel">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl flex items-center gap-2"><TrendingUp className="text-accent-primary" /> Skill Architecture</h3>
-                  <div className="flex gap-4 text-xs font-bold">
-                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-accent-primary"></span> Current</span>
-                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-white/20"></span> Target</span>
-                  </div>
-                </div>
-
-                <div style={{ height: '360px', width: '100%' }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
-                      <PolarGrid stroke="rgba(255,255,255,0.05)" />
-                      <PolarAngleAxis dataKey="skill" tick={{ fill: 'var(--text-muted)', fontSize: 13, fontWeight: 500 }} />
-                      <RechartsTooltip
-                        contentStyle={{ backgroundColor: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}
-                      />
-                      <Radar name="Target Profile" dataKey="required" stroke="rgba(255,255,255,0.2)" fill="rgba(255,255,255,0.1)" fillOpacity={0.1} />
-                      <Radar name="Your Profile" dataKey="current" stroke="var(--accent-primary)" fill="var(--accent-primary)" fillOpacity={0.4} />
-                    </RadarChart>
-                  </ResponsiveContainer>
-                </div>
-              </motion.div>
-
-              {/* Bar Chart Trends */}
-              <motion.div variants={itemVariants} className="col-span-12 card glass-panel">
-                <div className="flex items-center justify-between mb-8">
-                  <div>
-                    <h3 className="text-xl flex items-center gap-2"><Globe className="text-accent-tertiary" /> Market Intelligence</h3>
-                    <p className="text-sm text-muted mt-1">Real-time demand across top tech hubs</p>
-                  </div>
-                  <div className="badge-primary">Live Updates</div>
-                </div>
-
-                <div style={{ height: '280px', width: '100%' }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={industryTrends} margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
-                      <RechartsTooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: 'var(--bg-card)', border: 'none', borderRadius: '12px', color: 'white' }} />
-                      <Bar dataKey="demand" radius={[10, 10, 0, 0]} barSize={50}>
-                        {industryTrends.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} fillOpacity={0.8} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </motion.div>
+          <div className="space-y-6">
+            <motion.div variants={itemVariants} className="input-group">
+              <label className="input-label">Full Name</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter your name" className="input-field" />
             </motion.div>
-          )}
 
-          {activeTab === 'path' && (
-            <motion.div
-              key="path"
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="max-w-4xl mx-auto"
-            >
-              <div className="flex flex-col items-center mb-12 text-center">
-                <div className="badge-primary mb-4">Trajectory Path</div>
-                <h2 className="text-4xl font-extrabold mb-4">Your Intelligent Journey</h2>
-                <p className="text-muted max-w-xl">We've mapped your evolution from a Junior Developer to a Senior Full Stack Engineer. Follow the sequence for maximum career acceleration.</p>
-              </div>
-
-              <div className="relative space-y-12">
-                {/* Visual Connector Line */}
-                <div className="absolute left-[39px] top-4 bottom-4 w-1 bg-gradient-to-b from-status-success via-accent-primary to-white/5 rounded-full"></div>
-
-                {/* Milestone 1 */}
-                <motion.div variants={itemVariants} className="flex gap-8 relative z-10">
-                  <div className="w-20 h-20 rounded-2xl bg-status-success/20 border-2 border-status-success flex items-center justify-center text-status-success shadow-[0_0_20px_rgba(16,185,129,0.3)]">
-                    <CheckCircle2 size={36} />
-                  </div>
-                  <div className="flex-1 card glass-panel">
-                    <div className="flex justify-between items-center mb-3">
-                      <h4 className="text-xl font-bold">Frontend Foundations</h4>
-                      <span className="badge badge-success px-4 py-1.5 rounded-xl">Verified</span>
-                    </div>
-                    <p className="text-muted leading-relaxed">
-                      You have demonstrated mastery in <span className="text-main">React v18, TypeScript 5.0</span>, and modern state management. This is the bedrock of your stack.
-                    </p>
-                    <div className="flex gap-2 mt-4 text-xs">
-                      {['React', 'TypeScript', 'CSS/PostCSS'].map(s => <span key={s} className="bg-white/5 px-2 py-1 rounded-md border border-white/10">{s}</span>)}
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Milestone 2 */}
-                <motion.div variants={itemVariants} className="flex gap-8 relative z-10">
-                  <div className="w-20 h-20 rounded-2xl bg-accent-primary/20 border-2 border-accent-primary flex items-center justify-center text-accent-primary shadow-[0_0_20px_rgba(56,189,248,0.3)] shimmer">
-                    <Briefcase size={36} />
-                  </div>
-                  <div className="flex-1 card glass-panel shadow-2xl border-accent-primary/20">
-                    <div className="flex justify-between items-center mb-3">
-                      <h4 className="text-xl font-bold">Full Stack Integration</h4>
-                      <span className="badge badge-primary px-4 py-1.5 rounded-xl animate-pulse">Critical Phase</span>
-                    </div>
-                    <p className="text-muted leading-relaxed">
-                      Bridge your skills by deep-diving into <span className="text-main">Distributed Systems and Node.js Architectures</span>. This transition represents 60% of your career growth potential.
-                    </p>
-                    <div className="mt-4 space-y-2">
-                      <div className="flex justify-between text-xs font-bold mb-1">
-                        <span className="text-accent-primary">Estimated completion: 8 weeks</span>
-                        <span>45% Progress</span>
-                      </div>
-                      <div className="progress-bar"><div className="progress-fill" style={{ width: '45%' }}></div></div>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Milestone 3 */}
-                <motion.div variants={itemVariants} className="flex gap-8 relative z-10 opacity-50">
-                  <div className="w-20 h-20 rounded-2xl bg-white/5 border-2 border-white/10 flex items-center justify-center text-muted">
-                    <Rocket size={36} />
-                  </div>
-                  <div className="flex-1 card glass-panel">
-                    <div className="flex justify-between items-center mb-3">
-                      <h4 className="text-xl font-bold">Cloud-Native Mastery</h4>
-                      <span className="text-xs uppercase tracking-widest font-bold opacity-60">Locked</span>
-                    </div>
-                    <p className="text-muted">
-                      Deploy scalable infrastructure using <span className="text-main">AI-driven auto-scaling, Kubernetes</span>, and serverless edge computing.
-                    </p>
-                  </div>
-                </motion.div>
-              </div>
+            <motion.div variants={itemVariants} className="input-group">
+              <label className="input-label">Highest Education</label>
+              <input value={education} onChange={(e) => setEducation(e.target.value)} placeholder="e.g. B.Tech Computer Science" className="input-field" />
             </motion.div>
-          )}
 
-          {activeTab === 'recommendations' && (
-            <motion.div
-              key="learning"
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-              exit={{ opacity: 0, x: 20 }}
-              className="space-y-8"
-            >
-              <div className="bg-gradient-to-r from-accent-primary/20 to-accent-secondary/20 p-8 rounded-3xl border border-white/10 backdrop-blur-xl">
-                <div className="flex gap-6 items-center">
-                  <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center shadow-inner">
-                    <Zap size={32} className="text-accent-primary animate-float" />
-                  </div>
-                  <div>
-                    <h2 className="text-3xl font-bold">AI Recommended Stacks</h2>
-                    <p className="text-muted">High-ROI knowledge acquisition tailored to your unique profile and current market gaps.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-6">
-                {learningPaths.map((path, idx) => (
-                  <motion.div
-                    key={path.id}
-                    variants={itemVariants}
-                    whileHover={{ scale: 1.01, x: 5 }}
-                    className="card glass-panel flex flex-col md:flex-row items-center gap-8 group"
+            <motion.div variants={itemVariants} className="input-group">
+              <label className="input-label">Target Career Domain</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                {(Object.entries(CAREER_PATHS) as [CareerPathType, any][]).map(([key, info]) => (
+                  <button
+                    key={key}
+                    onClick={() => setGoal(key)}
+                    className={`btn text-left justify-start gap-3 p-4 border transition-all ${goal === key ? 'border-accent-primary bg-accent-primary/10 shadow-lg' : 'border-white/5 bg-white/5 opacity-70 hover:opacity-100'}`}
                   >
-                    <div className="w-full md:w-48 h-32 rounded-2xl bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center relative overflow-hidden">
-                      {path.id === 1 ? <BookOpen size={40} className="text-accent-primary" /> :
-                        path.id === 2 ? <TrendingUp size={40} className="text-accent-tertiary" /> :
-                          <Award size={40} className="text-accent-secondary" />}
-                      <div className="absolute top-0 right-0 p-3">
-                        <div className="badge-primary text-[10px]">{path.difficulty}</div>
-                      </div>
+                    {key === 'software-dev' && <Rocket size={18} />}
+                    {key === 'data-science' && <Briefcase size={18} />}
+                    {key === 'cybersecurity' && <ShieldCheck size={18} />}
+                    {key === 'ai-ml' && <BrainCircuit size={18} />}
+                    {key === 'cloud-computing' && <Cloud size={18} />}
+                    <div className="flex flex-col">
+                      <span className="font-bold text-sm">{info.label}</span>
+                      <span className="text-[10px] opacity-60 line-clamp-1">{info.description}</span>
                     </div>
-
-                    <div className="flex-1 text-left">
-                      <div className="flex flex-wrap items-center gap-3 mb-2">
-                        <h3 className="text-2xl font-bold group-hover:text-accent-primary transition-colors">{path.title}</h3>
-                        <span className="badge-primary px-3 py-1 bg-accent-primary/5 border-accent-primary/20 text-accent-primary">{path.type}</span>
-                      </div>
-                      <div className="flex flex-wrap gap-4 text-sm text-muted mb-4">
-                        <span className="flex items-center gap-1.5"><Globe size={14} /> {path.provider}</span>
-                        <span className="flex items-center gap-1.5"><Briefcase size={14} /> {path.duration}</span>
-                        <span className="flex items-center gap-1.5"><Users size={14} /> 12.5k Enrolled</span>
-                      </div>
-                      <div className="flex gap-2">
-                        {path.skills.map(s => <span key={s} className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-wider">{s}</span>)}
-                      </div>
-                    </div>
-
-                    <div className="w-full md:w-auto flex flex-col items-center md:items-end gap-3 min-w-[160px]">
-                      <div className="text-2xl font-black text-status-success flex items-center gap-2">
-                        {path.matchScore}% <span className="text-[10px] uppercase tracking-widest text-muted">Match</span>
-                      </div>
-                      <button className="btn btn-primary w-full group-hover:shadow-[0_0_20px_var(--accent-glow)]">
-                        Unlock Content <ChevronRight size={16} />
-                      </button>
-                    </div>
-                  </motion.div>
+                  </button>
                 ))}
               </div>
-
-              <div className="card glass-panel" style={{ borderLeft: '10px solid var(--accent-primary)', background: 'linear-gradient(90deg, rgba(56, 189, 248, 0.1), transparent)' }}>
-                <div className="flex items-start gap-6">
-                  <div className="p-3 bg-accent-primary/20 rounded-xl">
-                    <AlertCircle className="text-accent-primary" size={32} />
-                  </div>
-                  <div>
-                    <h4 className="text-xl font-bold mb-2">AI Reasoning Engine</h4>
-                    <p className="text-muted leading-relaxed">
-                      Our intelligence analyzed 14.5M job descriptions across LinkedIn, Glassdoor, and Indeed. <span className="text-accent-primary font-semibold">92% of "Senior Full Stack" roles</span> now mandate experience with cloud-native system design. We've prioritized these courses to minimize your "Time-to-Hire" by an estimated <span className="text-main font-bold">3.5 months</span>.
-                    </p>
-                  </div>
-                </div>
-              </div>
             </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
 
-      {/* Footer Decoration */}
-      <footer className="container py-12 border-t border-white/5 mt-12">
-        <div className="flex flex-col md:flex-row items-center justify-between text-muted text-sm gap-6">
-          <div className="flex items-center gap-2">
-            <Compass size={20} className="text-accent-primary" />
-            <span className="font-bold">SkillBridge AI v4.2.0</span>
-          </div>
-          <div className="flex gap-8">
-            <a href="#" className="hover:text-main">Neural Engine</a>
-            <a href="#" className="hover:text-main">Privacy Architecture</a>
-            <a href="#" className="hover:text-main">API Access</a>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex -space-x-2">
-              {[1, 2, 3, 4].map(i => <div key={i} className="w-8 h-8 rounded-full border-2 border-bg-dark bg-accent-secondary flex items-center justify-center text-[10px] font-bold">U{i}</div>)}
-            </div>
-            <span>+150k Active Navigators</span>
+            <motion.button
+              variants={itemVariants}
+              disabled={!name || !education}
+              onClick={() => handleStartOnboarding(name, education, goal)}
+              className="btn btn-primary w-full py-4 mt-6 disabled:opacity-30"
+            >
+              Analyze My Profile <ChevronRight size={18} />
+            </motion.button>
           </div>
         </div>
-      </footer>
+      </motion.div>
+    );
+  };
+
+  const AssessmentView = () => {
+    const questions = QUESTIONS_BY_PATH[user.goal];
+    const question = questions[currentQuestionIndex];
+
+    const handleAnswer = (optionIndex: number) => {
+      let newScore = score;
+      if (optionIndex === question.correctAnswer) newScore += 1;
+      setScore(newScore);
+
+      if (currentQuestionIndex < questions.length - 1) {
+        setCurrentQuestionIndex(prev => prev + 1);
+      } else {
+        handleAssessmentComplete(newScore);
+      }
+    };
+
+    return (
+      <motion.div variants={containerVariants} initial="hidden" animate="visible" className="container max-w-xl mt-20">
+        <div className="card glass-panel p-10">
+          <div className="flex justify-between items-center mb-10">
+            <span className="badge-primary px-3 py-1">Initial Assessment</span>
+            <span className="text-xs text-muted">Question {currentQuestionIndex + 1} of {questions.length}</span>
+          </div>
+
+          <motion.div key={question.id} initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }}>
+            <h2 className="text-2xl font-bold mb-8 leading-tight">{question.question}</h2>
+            <div className="space-y-4">
+              {question.options.map((option, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleAnswer(idx)}
+                  className="btn btn-secondary w-full text-left justify-start p-4 hover:border-accent-primary transition-colors group"
+                >
+                  <span className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center mr-3 group-hover:bg-accent-primary group-hover:text-white transition-colors">{String.fromCharCode(65 + idx)}</span>
+                  {option}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+
+          <div className="mt-12 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+            <div className="h-full bg-accent-primary transition-all duration-500" style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }}></div>
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
+
+  const MainDashboard = () => {
+    const roadmap = ROADMAPS[user.goal];
+    const radarData = Object.entries(user.skills).map(([key, value]) => ({
+      skill: key,
+      current: value,
+      fullMark: 100
+    }));
+
+    return (
+      <div className="app-wrapper min-h-screen">
+        <nav className="glass-panel sticky top-0 z-[100] border-none" style={{ background: 'rgba(2, 6, 23, 0.8)' }}>
+          <div className="container flex items-center justify-between h-20">
+            <div className="flex items-center gap-3">
+              <div className="badge-primary p-2 rounded-xl"><Compass size={24} /></div>
+              <span className="font-bold text-xl uppercase tracking-tighter">SkillBridge <span className="text-accent-primary">AI</span></span>
+            </div>
+
+            <div className="flex gap-2">
+              {['dashboard', 'path', 'recommendations'].map(tab => (
+                <button
+                  key={tab}
+                  className={`btn ${activeTab === tab ? 'btn-primary' : 'btn-icon'}`}
+                  onClick={() => setActiveTab(tab)}
+                  style={{ borderRadius: '12px' }}
+                >
+                  {tab === 'dashboard' && <Target size={18} />}
+                  {tab === 'path' && <Map size={18} />}
+                  {tab === 'recommendations' && <BookOpen size={18} />}
+                  <span className={activeTab === tab ? 'block ml-2' : 'hidden'}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="text-right hidden-mobile">
+                <div className="font-bold text-sm">{user.name}</div>
+                <div className="text-[10px] text-accent-primary font-bold">MATCH: {CAREER_PATHS[user.goal].label}</div>
+              </div>
+              <div className="avatar glow-effect w-10 h-10 rounded-xl bg-accent-primary flex items-center justify-center font-bold">AD</div>
+            </div>
+          </div>
+        </nav>
+
+        <main className="container py-10">
+          <AnimatePresence mode="wait">
+            {activeTab === 'dashboard' && (
+              <motion.div key="db" variants={containerVariants} initial="hidden" animate="visible" className="grid grid-cols-12 gap-6">
+                <div className="col-span-12 card glass-panel shadow-none border-white/5 bg-transparent p-0 mb-6 flex flex-col md:flex-row justify-between items-end gap-6">
+                  <div className="max-w-2xl">
+                    <h2 className="text-4xl font-black mb-2">Accelerating your {CAREER_PATHS[user.goal].label} journey.</h2>
+                    <p className="text-muted">Targeting roles at <span className="text-main font-semibold">Google, Meta, and Scale AI</span> based on your current performance trends.</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="badge-primary flex items-center gap-2 px-6 py-3 rounded-2xl"><Zap size={20} className="animate-pulse" /> Intelligence Optimized</div>
+                  </div>
+                </div>
+
+                {/* Skill Radar */}
+                <div className="col-span-12 lg:col-span-7 card glass-panel">
+                  <div className="flex justify-between items-center mb-8">
+                    <h3 className="text-xl font-bold flex items-center gap-2"><Target className="text-accent-primary" /> Skill Architecture</h3>
+                    <div className="text-[10px] uppercase tracking-widest font-black text-muted">Assessment Based Profile</div>
+                  </div>
+                  <div style={{ height: '350px', width: '100%' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
+                        <PolarGrid stroke="rgba(255,255,255,0.05)" />
+                        <PolarAngleAxis dataKey="skill" tick={{ fill: 'var(--text-muted)', fontSize: 13 }} />
+                        <RechartsTooltip contentStyle={{ backgroundColor: 'var(--bg-card)', border: 'none', borderRadius: '16px' }} />
+                        <Radar name="Your Profile" dataKey="current" stroke="var(--accent-primary)" fill="var(--accent-primary)" fillOpacity={0.4} />
+                      </RadarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Readiness */}
+                <div className="col-span-12 lg:col-span-5 card glass-panel shimmer">
+                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2"><Award className="text-accent-secondary" /> Readiness Score</h3>
+                  <div className="flex flex-col items-center">
+                    <div className="relative w-48 h-48 flex items-center justify-center">
+                      <svg className="w-full h-full transform -rotate-90">
+                        <circle cx="96" cy="96" r="88" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="12" />
+                        <circle cx="96" cy="96" r="88" fill="none" stroke="var(--accent-secondary)" strokeWidth="12" strokeDasharray="552.9" strokeDashoffset={552.9 - (552.9 * (score / 3 * 100)) / 100} strokeLinecap="round" />
+                      </svg>
+                      <div className="absolute text-center">
+                        <div className="text-5xl font-black">{Math.round(score / 3 * 100)}%</div>
+                        <div className="text-[10px] uppercase font-bold text-muted">Initial Match</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-8 space-y-4">
+                    <p className="text-sm text-center text-muted">You have a strong foundation in <span className="text-white">{user.goal.split('-')[0]} fundamentals</span>, but need to bridge gap in <span className="text-accent-primary">Advanced Concepts</span>.</p>
+                    <button className="btn btn-primary w-full" onClick={() => setActiveTab('path')}>Explore Roadmap <ChevronRight size={16} /></button>
+                  </div>
+                </div>
+
+                {/* Trends */}
+                <div className="col-span-12 card glass-panel">
+                  <div className="flex justify-between items-center mb-8">
+                    <div>
+                      <h3 className="text-xl font-bold flex items-center gap-2"><TrendingUp className="text-accent-tertiary" /> Market Intelligence</h3>
+                      <p className="text-sm text-muted">Demand trends in {CAREER_PATHS[user.goal].label}</p>
+                    </div>
+                    <div className="badge-primary px-4 py-2">LIVE DATA</div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+                    {INDUSTRY_TRENDS.slice(0, 5).map((trend, i) => (
+                      <div key={i} className="p-6 rounded-3xl bg-white/5 border border-white/5 hover:border-accent-tertiary/30 transition-all hover:-translate-y-1">
+                        <div className="text-2xl font-black text-accent-tertiary mb-1">{trend.growth}</div>
+                        <div className="text-sm font-bold text-main mb-3">{trend.name}</div>
+                        <div className="h-1 w-full bg-white/5 rounded-full"><div className="h-full bg-accent-tertiary" style={{ width: `${trend.demand}%` }}></div></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'path' && (
+              <motion.div key="path" variants={containerVariants} initial="hidden" animate="visible" className="max-w-4xl mx-auto">
+                <div className="text-center mb-16">
+                  <div className="badge-primary mb-4">SEQUENTIAL GROWTH</div>
+                  <h2 className="text-4xl font-extrabold mb-4">Structured {CAREER_PATHS[user.goal].label} Roadmap</h2>
+                  <p className="text-muted">Personalized path for <span className="text-main font-bold">{user.name}</span> based on {user.education} background.</p>
+                </div>
+
+                <div className="relative space-y-12">
+                  <div className="absolute left-[39px] top-6 bottom-6 w-1 bg-white/5 rounded-full"></div>
+                  {roadmap.map((step, idx) => (
+                    <motion.div key={idx} variants={itemVariants} className="flex gap-8 group">
+                      <div className={`w-20 h-20 rounded-3xl shrink-0 flex items-center justify-center border-2 transition-all group-hover:scale-110 ${step.status === 'completed' ? 'bg-status-success/20 border-status-success text-status-success' : step.status === 'current' ? 'bg-accent-primary/20 border-accent-primary text-accent-primary shadow-[0_0_20px_rgba(56,189,248,0.3)]' : 'bg-white/5 border-white/10 text-muted opacity-50'}`}>
+                        {step.status === 'completed' ? <CheckCircle2 size={36} /> : step.status === 'current' ? <Zap size={36} className="animate-float" /> : <ShieldCheck size={30} />}
+                      </div>
+                      <div className={`flex-1 card glass-panel transition-all ${step.status === 'current' ? 'border-accent-primary/50 shadow-2xl scale-[1.02]' : 'opacity-80'}`}>
+                        <div className="flex justify-between items-center mb-3">
+                          <h4 className="text-xl font-bold">{step.title}</h4>
+                          <span className={`badge uppercase text-[10px] ${step.status === 'completed' ? 'badge-success' : step.status === 'current' ? 'badge-primary animate-pulse' : 'text-muted'}`}>{step.status}</span>
+                        </div>
+                        <p className="text-muted mb-4">{step.description}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {step.technologies.map(tech => <span key={tech} className="bg-white/5 px-3 py-1 rounded-lg border border-white/10 text-[10px] font-bold text-accent-primary uppercase tracking-widest">{tech}</span>)}
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'recommendations' && (
+              <motion.div key="rec" variants={containerVariants} initial="hidden" animate="visible" className="space-y-8">
+                <div className="bg-gradient-to-r from-accent-primary/20 to-accent-secondary/20 p-10 rounded-[40px] border border-white/10">
+                  <h2 className="text-3xl font-black mb-2">Curated Skill Bridge</h2>
+                  <p className="text-muted">Resources and projects strategically selected to reduce your hiring turnaround time.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="card glass-panel group hover:border-accent-primary/50 transition-all">
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="p-3 bg-accent-primary/10 rounded-2xl"><BookOpen size={24} className="text-accent-primary" /></div>
+                      <h3 className="text-xl font-bold">Top Verified Resource</h3>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-2xl bg-white/5 border border-white/5 group-hover:bg-white/10 transition-colors">
+                        <div className="font-bold mb-1">Advanced {user.goal === 'software-dev' ? 'System Design' : 'Data Engineering'} Course</div>
+                        <div className="text-xs text-muted">Provided by Industry Experts • 8 Weeks</div>
+                        <button className="btn btn-primary w-full mt-4 py-2 text-sm">Enroll Now <ChevronRight size={14} /></button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card glass-panel group hover:border-status-success/50 transition-all">
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="p-3 bg-status-success/10 rounded-2xl"><Rocket size={24} className="text-status-success" /></div>
+                      <h3 className="text-xl font-bold">Portfolio Project</h3>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+                      <div className="font-bold mb-1">Scalable {user.goal.split('-')[0].toUpperCase()} Application</div>
+                      <p className="text-xs text-muted mb-4">Build and deploy a full-scale platform demonstrating {user.goal} principles.</p>
+                      <div className="flex gap-2">
+                        <span className="badge badge-success text-[8px]">Hiring Bonus</span>
+                        <span className="badge badge-primary text-[8px]">PRO Portfolio</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card glass-panel flex items-start gap-8 p-10" style={{ borderLeft: '12px solid var(--accent-primary)' }}>
+                  <div className="p-4 bg-accent-primary/10 rounded-2xl shrink-0"><AlertCircle className="text-accent-primary" size={32} /></div>
+                  <div>
+                    <h4 className="text-2xl font-black mb-2">AI Reasoner Insight</h4>
+                    <p className="text-muted leading-relaxed">Based on your {user.education} background and assessment performance, we recommend focusing on <span className="text-main font-bold">Practical Infrastructure</span>. Recent trends in {CAREER_PATHS[user.goal].label} show that 85% of interview blocks at Tier-1 companies now prioritize architecture over syntax mastery.</p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </main>
+      </div>
+    );
+  };
+
+  if (showSplash) return <SplashView />;
+
+  return (
+    <div className="min-h-screen relative overflow-x-hidden">
+      <div className="bg-mesh"></div>
+      <AnimatePresence mode="wait">
+        {view === 'onboarding' && (
+          <motion.div key="onboarding" exit={{ x: -20, opacity: 0 }} transition={{ duration: 0.5 }}>
+            <OnboardingView />
+          </motion.div>
+        )}
+        {view === 'assessment' && (
+          <motion.div key="assessment" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
+            <AssessmentView />
+          </motion.div>
+        )}
+        {view === 'main' && (
+          <motion.div key="main" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
+            <MainDashboard />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
