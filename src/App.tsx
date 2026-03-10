@@ -13,13 +13,11 @@ import {
   CheckCircle2,
   AlertCircle,
   Users,
-  Star,
   Globe,
   Rocket,
   BrainCircuit,
   ShieldCheck,
   Cloud,
-  ChevronLeft,
   GraduationCap
 } from 'lucide-react';
 import {
@@ -28,19 +26,12 @@ import {
   RadarChart,
   PolarGrid,
   PolarAngleAxis,
-  Tooltip as RechartsTooltip,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Cell
+  Tooltip as RechartsTooltip
 } from 'recharts';
 import type { CareerPathType, UserProfile } from './types';
 import { CAREER_PATHS, QUESTIONS_BY_PATH, ROADMAPS, INDUSTRY_TRENDS } from './data/careerData';
 import './index.css';
 
-// --- STYLES & VARIANTS ---
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
@@ -48,14 +39,13 @@ const containerVariants = {
 
 const itemVariants = {
   hidden: { y: 20, opacity: 0 },
-  visible: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 100 } }
+  visible: { y: 0, opacity: 1, transition: { type: 'spring' as const, stiffness: 100 } }
 };
 
 // --- COMPONENTS ---
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [mounted, setMounted] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const [view, setView] = useState<'login' | 'onboarding' | 'assessment' | 'main'>('login');
 
@@ -79,7 +69,6 @@ function App() {
   const [score, setScore] = useState(0);
 
   useEffect(() => {
-    setMounted(true);
     const timer = setTimeout(() => setShowSplash(false), 3000);
     return () => clearTimeout(timer);
   }, []);
