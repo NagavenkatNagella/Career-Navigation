@@ -4,25 +4,32 @@ import {
   BrainCircuit, Target, Map, BookOpen, Users,
   ChevronRight, Zap, CheckCircle2, AlertCircle, TrendingUp,
   Award, Globe, Rocket, ShieldCheck, Cloud, Briefcase,
-  Star, BarChart3, Lock, Menu, X, RefreshCw, User
+  Star, BarChart3, Lock, Menu, X, RefreshCw, User,
+  FilePlus, Image, MessageSquare, Send, Trash2, Ban,
+  FileUp, Paperclip, Heart, MessageCircle, MoreVertical
 } from 'lucide-react';
 import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis,
   Radar, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   AreaChart, Area
 } from 'recharts';
-import type { CareerPathType, UserProfile } from './types';
+import type { CareerPathType, UserProfile, Post, CommunityMessage } from './types';
 import { CAREER_PATHS, QUESTIONS_BY_PATH, ROADMAPS, INDUSTRY_TRENDS } from './data/careerData';
 import './index.css';
 
-import { auth, db, googleProvider } from './firebase';
+import { auth, db, googleProvider, storage } from './firebase';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   onAuthStateChanged,
   signInWithPopup
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, query, getDocs, where, updateDoc, arrayUnion, onSnapshot, addDoc } from 'firebase/firestore';
+import { 
+  doc, getDoc, setDoc, collection, query, getDocs, 
+  where, updateDoc, arrayUnion, onSnapshot, addDoc, 
+  arrayRemove, serverTimestamp, deleteDoc, orderBy, limit 
+} from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // ─── Motion Variants ─────────────────────────────────────────
 const fadeUp: Variants = {
@@ -2283,17 +2290,53 @@ function ProfileTab({ user, setUser }: { user: UserProfile; setUser: React.Dispa
 
 function MentorUserManagement() {
   const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<any>(null);
 
   useEffect(() => {
     const fetchUsers = async () => {
-      const q = query(collection(db, 'users'));
-      const querySnapshot = await getDocs(q);
-      const userList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setUsers(userList.filter((u: any) => u.role === 'user'));
+      if (!auth.currentUser) return;
+      try {
+        setLoading(true);
+        const mentorDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        const mentees = mentorDoc.data()?.mentees || [];
+        
+        if (mentees.length === 0) {
+          setUsers([]);
+          return;
+        }
+
+        const q = query(collection(db, 'users'), where('__name__', 'in', mentees));
+        const querySnapshot = await getDocs(q);
+        const userList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setUsers(userList);
+      } catch (err) {
+        console.error("Error fetching mentees:", err);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchUsers();
   }, []);
+
+  const handleDisconnect = async (learnerId: string) => {
+    if (!auth.currentUser || !window.confirm("Are you sure you want to remove this learner? This will terminate your mentorship connection.")) return;
+    try {
+      // Remove learner from mentor
+      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+        mentees: arrayRemove(learnerId)
+      });
+      // Remove mentor from learner
+      await updateDoc(doc(db, 'users', learnerId), {
+        mentors: arrayRemove(auth.currentUser.uid)
+      });
+      
+      setUsers(prev => prev.filter(u => u.id !== learnerId));
+      if (selectedUser?.id === learnerId) setSelectedUser(null);
+    } catch (err) {
+      console.error("Disconnect failed:", err);
+    }
+  };
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="visible">
@@ -2313,8 +2356,10 @@ function MentorUserManagement() {
             </tr>
           </thead>
           <tbody>
-            {users.length === 0 ? (
-              <tr><td colSpan={4} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>No active learners found.</td></tr>
+            {loading ? (
+              <tr><td colSpan={4} style={{ padding: '3rem', textAlign: 'center' }}><RefreshCw className="animate-spin" /></td></tr>
+            ) : users.length === 0 ? (
+              <tr><td colSpan={4} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>No accepted learners found. Accepted requests will appear here.</td></tr>
             ) : users.map((u) => (
               <tr key={u.id} style={{ borderBottom: '1px solid var(--border-subtle)', transition: 'background 0.3s' }}>
                 <td style={{ padding: '1.25rem' }}>
@@ -2340,7 +2385,12 @@ function MentorUserManagement() {
                   </div>
                 </td>
                 <td style={{ padding: '1.25rem', textAlign: 'right' }}>
-                  <button onClick={() => setSelectedUser(u)} className="btn btn-ghost" style={{ fontSize: '0.75rem' }}>Review Details</button>
+                  <div style={{ display:'flex', justifyContent:'flex-end', gap:'0.75rem' }}>
+                    <button onClick={() => setSelectedUser(u)} className="btn btn-ghost" style={{ fontSize: '0.75rem' }}>Review Details</button>
+                    <button onClick={() => handleDisconnect(u.id)} className="btn btn-ghost" style={{ padding:8, color:'#ef4444' }} title="Terminate Mentorship">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -2443,14 +2493,12 @@ function ChatTab({ user, role }: { user: UserProfile, role: 'user' | 'mentor' })
   const sendMessage = async () => {
     if (!input.trim() || !selectedPeer || !auth.currentUser) return;
     const roomId = [auth.currentUser.uid, selectedPeer.id].sort().join('_');
-    
     try {
       const msgData = {
         senderId: auth.currentUser.uid,
         text: input,
         timestamp: new Date().toISOString()
       };
-      
       await addDoc(collection(db, `chats/${roomId}/messages`), msgData);
       await updateDoc(doc(db, 'chats', roomId), {
         lastMessage: input,
@@ -2459,6 +2507,35 @@ function ChatTab({ user, role }: { user: UserProfile, role: 'user' | 'mentor' })
       setInput('');
     } catch (err) {
       console.error("Chat send error:", err);
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    if (!selectedPeer || !auth.currentUser) return;
+    setLoading(true);
+    const roomId = [auth.currentUser.uid, selectedPeer.id].sort().join('_');
+    try {
+      const storageRef = ref(storage, `chats/${roomId}/${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+      
+      const msgData = {
+        senderId: auth.currentUser.uid,
+        text: `Shared a file: ${file.name}`,
+        fileUrl: url,
+        fileName: file.name,
+        timestamp: new Date().toISOString()
+      };
+      
+      await addDoc(collection(db, `chats/${roomId}/messages`), msgData);
+      await updateDoc(doc(db, 'chats', roomId), {
+        lastMessage: `📎 ${file.name}`,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error("Chat file upload error:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -2507,18 +2584,36 @@ function ChatTab({ user, role }: { user: UserProfile, role: 'user' | 'mentor' })
               {messages.map(m => (
                 <div key={m.id} style={{ 
                   alignSelf: m.senderId === auth.currentUser?.uid ? 'flex-end' : 'flex-start',
-                  maxWidth:'70%', padding:'0.75rem 1rem', borderRadius:16,
+                  maxWidth:'75%', padding:'0.75rem 1rem', borderRadius:16,
                   background: m.senderId === auth.currentUser?.uid ? 'var(--accent-1)' : 'rgba(255,255,255,0.05)',
                   color: m.senderId === auth.currentUser?.uid ? '#fff' : 'inherit',
                   boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
                 }}>
+                  {m.fileUrl ? (
+                    <div style={{ padding:'0.5rem', background:'rgba(255,255,255,0.1)', borderRadius:12, marginBottom:'0.5rem', display:'flex', alignItems:'center', gap:'0.75rem' }}>
+                      <div style={{ width:36, height:36, borderRadius:8, background:'rgba(255,255,255,0.1)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                        <FileUp size={18} />
+                      </div>
+                      <div style={{ flex:1, overflow:'hidden' }}>
+                        <div style={{ fontWeight:700, fontSize:'0.8rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{m.fileName}</div>
+                        <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize:'0.7rem', color: m.senderId === auth.currentUser?.uid ? '#fff' : 'var(--accent-1)', fontWeight:800 }}>Download Resource</a>
+                      </div>
+                    </div>
+                  ) : null}
                   <div style={{ fontSize:'0.9rem' }}>{m.text}</div>
                   <div style={{ fontSize:'0.6rem', opacity:0.6, marginTop:'0.25rem', textAlign:'right' }}>{new Date(m.timestamp).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</div>
                 </div>
               ))}
               {messages.length === 0 && <div style={{ textAlign:'center', margin:'auto', color:'var(--text-muted)' }}>Send a message to start the conversation!</div>}
             </div>
-            <div style={{ padding:'1rem 1.5rem', borderTop:'1px solid var(--border-subtle)', display:'flex', gap:'0.75rem' }}>
+            <div style={{ padding:'1rem 1.5rem', borderTop:'1px solid var(--border-subtle)', display:'flex', gap:'0.75rem', alignItems:'center' }}>
+              <label style={{ width:42, height:42, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(255,255,255,0.03)', borderRadius:12, cursor:'pointer', border:'1px solid var(--border-subtle)' }} title="Attach File">
+                <input type="file" style={{ display:'none' }} onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFileUpload(file);
+                }} />
+                <Paperclip size={18} color="var(--text-muted)" />
+              </label>
               <input 
                 className="input-field" 
                 placeholder="Type a message..." 
@@ -2526,7 +2621,7 @@ function ChatTab({ user, role }: { user: UserProfile, role: 'user' | 'mentor' })
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && sendMessage()}
               />
-              <button className="btn btn-primary" onClick={sendMessage} style={{ borderRadius:12 }}>Send</button>
+              <button className="btn btn-primary" onClick={sendMessage} style={{ borderRadius:12, height:42, padding:'0 1.5rem' }}>Send</button>
             </div>
           </>
         ) : (
@@ -2648,26 +2743,71 @@ function ResourcesHub({ user, role }: { user: UserProfile, role: 'user' | 'mento
 // COMMUNITIES & GROUPS
 // ═══════════════════════════════════════════════════════════════
 function CommunitiesTab({ user, role, onNotify }: { user: UserProfile, role: 'user' | 'mentor', onNotify?: (msg: string) => void }) {
+  const [cmTab, setCmTab] = useState<'feed' | 'groups' | 'chat'>('feed');
   const [groups, setGroups] = useState<any[]>([]);
+  const [posts, setPosts] = useState<any[]>([]);
+  const [globalMsgs, setGlobalMsgs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
   const [showCreate, setShowCreate] = useState(false);
   const [gName, setGName] = useState('');
   const [gDesc, setGDesc] = useState('');
 
+  const [postInput, setPostInput] = useState('');
+  const [chatInput, setChatInput] = useState('');
+  const [uploading, setUploading] = useState(false);
+
   useEffect(() => {
-    const fetchGroups = async () => {
-      try {
-        const q = query(collection(db, 'groups'));
-        const snapshot = await getDocs(q);
-        setGroups(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      } catch (err) {
-        console.error("Groups fetch error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchGroups();
+    // 1. Fetch Groups
+    const unsubGroups = onSnapshot(collection(db, 'groups'), (snap) => {
+      setGroups(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    // 2. Fetch Posts
+    const postsQuery = query(collection(db, 'posts'), orderBy('timestamp', 'desc'), limit(50));
+    const unsubPosts = onSnapshot(postsQuery, (snap) => {
+      setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    // 3. Fetch Global Chat
+    const chatQuery = query(collection(db, 'globalChat'), orderBy('timestamp', 'asc'), limit(100));
+    const unsubChat = onSnapshot(chatQuery, (snap) => {
+      setGlobalMsgs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    setLoading(false);
+    return () => { unsubGroups(); unsubPosts(); unsubChat(); };
   }, []);
+
+  const handleCreatePost = async (fileUrl?: string, fileName?: string) => {
+    if (!postInput.trim() && !fileUrl) return;
+    try {
+      await addDoc(collection(db, 'posts'), {
+        authorId: auth.currentUser?.uid,
+        authorName: user.name || auth.currentUser?.email?.split('@')[0],
+        text: postInput,
+        timestamp: new Date().toISOString(),
+        fileUrl: fileUrl || null,
+        fileName: fileName || null,
+        likes: [],
+        comments: []
+      });
+      setPostInput('');
+    } catch (err) { console.error("Post failed:", err); }
+  };
+
+  const handleSendGlobal = async () => {
+    if (!chatInput.trim()) return;
+    try {
+      await addDoc(collection(db, 'globalChat'), {
+        senderId: auth.currentUser?.uid,
+        senderName: user.name || auth.currentUser?.email?.split('@')[0],
+        text: chatInput,
+        timestamp: new Date().toISOString()
+      });
+      setChatInput('');
+    } catch (err) { console.error("Chat send failed:", err); }
+  };
 
   const handleCreateGroup = async () => {
     if (!gName || !gDesc) return;
@@ -2695,61 +2835,188 @@ function CommunitiesTab({ user, role, onNotify }: { user: UserProfile, role: 'us
       await updateDoc(doc(db, 'groups', groupId), {
         members: arrayUnion(auth.currentUser.uid)
       });
-      if (onNotify) onNotify("Establish collaboration with peers in this space.");
-    } catch (err) {
-      console.error("Join failed:", err);
-    }
+      if (onNotify) onNotify("Welcome to the community! Connect with your peers.");
+    } catch (err) { console.error("Join failed:", err); }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      const storageRef = ref(storage, `uploads/${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+      if (cmTab === 'feed') handleCreatePost(url, file.name);
+      // Logic for adding to chat could be here too if needed
+    } catch (err) { console.error("Upload failed:", err); }
+    finally { setUploading(false); }
   };
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:'2rem' }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+    <div style={{ display:'flex', flexDirection:'column', gap:'1.75rem', maxWidth: 900, margin: '0 auto' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', borderBottom:'1px solid var(--border-subtle)', paddingBottom:'1.25rem' }}>
         <div>
-          <h2 style={{ fontFamily:'var(--font-display)', fontSize:'2rem', fontWeight:900 }}>Global Communities</h2>
-          <p style={{ color:'var(--text-muted)' }}>Collaborate with peers and experts in specialized learning groups.</p>
+          <h2 style={{ fontFamily:'var(--font-display)', fontSize:'2rem', fontWeight:900, marginBottom:'0.25rem' }}>Skill Hub</h2>
+          <p style={{ color:'var(--text-muted)', fontSize:'0.9rem' }}>Forge connections and share industry insights.</p>
         </div>
-        {role === 'mentor' && <button className="btn btn-primary" onClick={() => setShowCreate(true)}>Create Community</button>}
-      </div>
-
-      {showCreate && (
-        <div className="card-premium" style={{ padding:'2rem' }}>
-          <h3 style={{ fontWeight:800, marginBottom:'1.5rem' }}>New Group Details</h3>
-          <div className="input-wrap" style={{ marginBottom:'1rem' }}>
-            <label className="input-label">Community Name</label>
-            <input className="input-field" value={gName} onChange={e => setGName(e.target.value)} placeholder="e.g. Frontend Masters Series" />
-          </div>
-          <div className="input-wrap" style={{ marginBottom:'1.5rem' }}>
-            <label className="input-label">Description</label>
-            <textarea className="input-field" value={gDesc} onChange={e => setGDesc(e.target.value)} placeholder="What is the goal of this group?" />
-          </div>
-          <div style={{ display:'flex', justifyContent:'flex-end', gap:'1rem' }}>
-            <button className="btn btn-ghost" onClick={() => setShowCreate(false)}>Cancel</button>
-            <button className="btn btn-primary" onClick={handleCreateGroup}>Establish Community</button>
-          </div>
-        </div>
-      )}
-
-      {loading ? <div style={{ textAlign:'center', padding:'4rem' }}><RefreshCw className="animate-spin" /></div> : (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))', gap:'2rem' }}>
-          {groups.map(g => (
-            <div key={g.id} className="card-premium" style={{ padding:'2rem', display:'flex', flexDirection:'column' }}>
-              <div style={{ width:48, height:48, borderRadius:14, background:'linear-gradient(135deg,#7c3aed,#ec4899)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', marginBottom:'1.5rem' }}>
-                <Globe size={24} />
-              </div>
-              <h3 style={{ fontWeight:800, marginBottom:'0.5rem' }}>{g.name}</h3>
-              <p style={{ fontSize:'0.85rem', color:'var(--text-muted)', marginBottom:'1.5rem', flex:1 }}>{g.description}</p>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
-                  <Users size={14} color="var(--accent-1)" />
-                  <span style={{ fontSize:'0.75rem', fontWeight:700 }}>{g.members?.length || 0} Members</span>
-                </div>
-                {!g.members?.includes(auth.currentUser?.uid) && (
-                  <button className="btn btn-ghost" onClick={() => joinGroup(g.id)} style={{ fontSize:'0.8rem' }}>Join</button>
-                )}
-              </div>
-            </div>
+        <div style={{ display:'flex', gap:'0.4rem', background:'rgba(255,255,255,0.03)', padding:'0.35rem', borderRadius:14 }}>
+          {(['feed', 'groups', 'chat'] as const).map(t => (
+            <button key={t} onClick={() => setCmTab(t)} className={`tab-btn ${cmTab === t ? 'active' : ''}`} style={{ textTransform:'capitalize', minWidth:90, fontSize:'0.85rem' }}>{t}</button>
           ))}
         </div>
+      </div>
+
+      {cmTab === 'feed' && (
+        <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ display:'flex', flexDirection:'column', gap:'1.5rem' }}>
+          <div className="card-premium" style={{ padding:'1.5rem' }}>
+             <div style={{ display:'flex', gap:'1rem' }}>
+                <div style={{ width:42, height:42, borderRadius:12, background:'var(--accent-1)', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.1rem', fontWeight:800 }}>{user.name?.[0] || 'U'}</div>
+                <div style={{ flex:1 }}>
+                   <textarea 
+                    value={postInput} 
+                    onChange={e => setPostInput(e.target.value)} 
+                    placeholder="Share an insight or resource..." 
+                    style={{ width:'100%', background:'transparent', border:'none', color:'var(--text-primary)', fontSize:'0.95rem', resize:'none', minHeight:60, outline:'none', padding:'0.5rem 0' }}
+                   />
+                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', paddingTop:'1rem', borderTop:'1px solid var(--border-subtle)' }}>
+                      <div style={{ display:'flex', gap:'1rem' }}>
+                        <label style={{ cursor:'pointer', color:'var(--text-muted)', display:'flex', alignItems:'center', gap:'0.5rem', fontSize:'0.8rem', fontWeight:600 }}>
+                          <input type="file" style={{ display:'none' }} onChange={e => {
+                            const file = e.target.files?.[0];
+                            if (file) handleFileUpload(file);
+                          }} />
+                          <Paperclip size={16} /> {uploading ? 'Uploading...' : 'Attach Resource'}
+                        </label>
+                      </div>
+                      <button className="btn btn-primary" onClick={() => handleCreatePost()} style={{ padding:'0.5rem 1.5rem', fontSize:'0.85rem' }} disabled={uploading}>Post Insight</button>
+                   </div>
+                </div>
+             </div>
+          </div>
+
+          <div style={{ display:'flex', flexDirection:'column', gap:'1.25rem' }}>
+            {posts.length === 0 && !loading && (
+              <div style={{ textAlign:'center', padding:'4rem', opacity:0.4 }}>
+                <MessageSquare size={48} style={{ margin:'0 auto 1rem' }} />
+                <p>No activity yet. Be the first to share something!</p>
+              </div>
+            )}
+            {posts.map(post => (
+              <motion.div key={post.id} className="card-premium" style={{ padding:'1.75rem' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'1.25rem' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:'0.875rem' }}>
+                    <div style={{ width:40, height:40, borderRadius:10, background:'rgba(255,255,255,0.05)', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--accent-1)', fontWeight:800 }}>{post.authorName?.[0]}</div>
+                    <div>
+                      <h4 style={{ fontWeight:800, fontSize:'0.95rem' }}>{post.authorName}</h4>
+                      <p style={{ fontSize:'0.7rem', color:'var(--text-muted)', fontWeight:600 }}>{post.timestamp ? new Date(post.timestamp).toLocaleDateString() : 'Just now'}</p>
+                    </div>
+                  </div>
+                  <button className="btn btn-ghost" style={{ padding:6 }}><MoreVertical size={16}/></button>
+                </div>
+                <p style={{ fontSize:'0.95rem', lineHeight:1.6, color:'var(--text-primary)', marginBottom: post.fileUrl ? '1.25rem' : '1.25rem', whiteSpace: 'pre-wrap' }}>{post.text}</p>
+                {post.fileUrl && (
+                  <div style={{ marginBottom:'1.25rem', padding:'1rem', borderRadius:14, background:'rgba(56,189,248,0.04)', border:'1px solid rgba(56,189,248,0.1)', display:'flex', alignItems:'center', gap:'1rem' }}>
+                    <div style={{ width:42, height:42, borderRadius:10, background:'rgba(56,189,248,0.1)', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--accent-1)' }}><FileUp size={20}/></div>
+                    <div style={{ flex:1 }}>
+                      <p style={{ fontWeight:700, fontSize:'0.85rem', marginBottom:2 }}>{post.fileName || 'Shared Document'}</p>
+                      <a href={post.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color:'var(--accent-1)', fontSize:'0.75rem', fontWeight:800 }}>Download Resource</a>
+                    </div>
+                  </div>
+                )}
+                <div style={{ display:'flex', gap:'1.5rem' }}>
+                   <button className="btn btn-ghost" style={{ gap:'0.4rem', fontSize:'0.8rem', padding:'4px 8px' }}><Heart size={16} /> 0</button>
+                   <button className="btn btn-ghost" style={{ gap:'0.4rem', fontSize:'0.8rem', padding:'4px 8px' }}><MessageCircle size={16} /> 0</button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {cmTab === 'groups' && (
+        <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ display:'flex', flexDirection:'column', gap:'1.75rem' }}>
+           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <h3 style={{ fontWeight:800, fontSize:'1.1rem' }}>Discover Professional Communities</h3>
+            {role === 'mentor' && <button className="btn btn-primary" style={{ padding:'0.5rem 1.25rem', fontSize:'0.85rem' }} onClick={() => setShowCreate(true)}>Create Community</button>}
+          </div>
+
+          {showCreate && (
+             <motion.div initial={{ opacity:0, y:-20 }} animate={{ opacity:1, y:0 }} className="card-premium" style={{ padding:'1.75rem' }}>
+              <h4 style={{ fontWeight:800, marginBottom:'1.25rem' }}>Establish New Cohort</h4>
+              <div className="input-wrap" style={{ marginBottom:'1rem' }}>
+                <label className="input-label">Community Name</label>
+                <input className="input-field" value={gName} onChange={e => setGName(e.target.value)} placeholder="e.g. Advanced AI/ML Ethics" />
+              </div>
+              <div className="input-wrap" style={{ marginBottom:'1.5rem' }}>
+                <label className="input-label">Mission Statement</label>
+                <textarea className="input-field" value={gDesc} onChange={e => setGDesc(e.target.value)} placeholder="What will this group achieve?" />
+              </div>
+              <div style={{ display:'flex', justifyContent:'flex-end', gap:'1rem' }}>
+                <button className="btn btn-ghost" onClick={() => setShowCreate(false)}>Cancel</button>
+                <button className="btn btn-primary" onClick={handleCreateGroup}>Establish</button>
+              </div>
+            </motion.div>
+          )}
+
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:'1.5rem' }}>
+            {groups.map(g => (
+              <div key={g.id} className="card-premium" style={{ padding:'1.5rem', display:'flex', flexDirection:'column' }}>
+                <div style={{ width:44, height:44, borderRadius:12, background:'linear-gradient(135deg,#7c3aed,#ec4899)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', marginBottom:'1.25rem' }}>
+                  <Globe size={20} />
+                </div>
+                <h3 style={{ fontWeight:800, marginBottom:'0.5rem', fontSize:'1.1rem' }}>{g.name}</h3>
+                <p style={{ color:'var(--text-muted)', fontSize:'0.8rem', marginBottom:'1.5rem', lineHeight:1.5, flex:1 }}>{g.description}</p>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:'0.4rem', color:'var(--text-muted)' }}>
+                    <Users size={14} /> <span style={{ fontSize:'0.75rem', fontWeight:600 }}>{g.members?.length || 0}</span>
+                  </div>
+                  {g.members?.includes(auth.currentUser?.uid) ? (
+                    <span className="badge badge-green" style={{ fontSize:'0.7rem' }}>Member</span>
+                  ) : (
+                    <button className="btn btn-primary" style={{ padding:'0.4rem 1.25rem', fontSize:'0.8rem' }} onClick={() => joinGroup(g.id)}>Join Base</button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {cmTab === 'chat' && (
+        <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} className="card-premium" style={{ height:550, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+           <div style={{ padding:'1.25rem 1.5rem', borderBottom:'1px solid var(--border-subtle)', background:'rgba(255,255,255,0.01)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
+                 <div style={{ width:8, height:8, borderRadius:'50%', background:'#10b981', boxShadow:'0 0 10px #10b981' }} />
+                 <h4 style={{ fontWeight:800, fontSize:'0.95rem' }}>Global Mentorship Chat</h4>
+              </div>
+              <span style={{ fontSize:'0.7rem', color:'var(--text-muted)', fontWeight:700, textTransform:'uppercase' }}>Live Sync Active</span>
+           </div>
+           
+           <div style={{ flex:1, overflowY:'auto', padding:'1.5rem', display:'flex', flexDirection:'column', gap:'0.875rem', background:'rgba(0,0,0,0.1)' }}>
+              {globalMsgs.length === 0 && <div style={{ textAlign:'center', paddingTop:'4rem', opacity:0.3, fontSize:'0.85rem' }}>Connected. Start a conversation...</div>}
+              {globalMsgs.map((msg) => (
+                <div key={msg.id} style={{ alignSelf: msg.senderId === auth.currentUser?.uid ? 'flex-end' : 'flex-start', maxWidth:'85%' }}>
+                   <div style={{ fontSize:'0.65rem', color:'var(--text-muted)', marginBottom:4, fontWeight:700, textAlign: msg.senderId === auth.currentUser?.uid ? 'right' : 'left' }}>{msg.senderName}</div>
+                   <div style={{ padding:'0.6rem 1.1rem', borderRadius:14, borderTopRightRadius: msg.senderId === auth.currentUser?.uid ? 0 : 14, borderTopLeftRadius: msg.senderId === auth.currentUser?.uid ? 14 : 0, background: msg.senderId === auth.currentUser?.uid ? 'var(--accent-1)' : 'rgba(255,255,255,0.06)', color: msg.senderId === auth.currentUser?.uid ? '#fff' : 'var(--text-primary)', fontSize:'0.9rem', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                      {msg.text}
+                   </div>
+                </div>
+              ))}
+           </div>
+
+           <div style={{ padding:'1.25rem', borderTop:'1px solid var(--border-subtle)', background:'var(--bg-card)' }}>
+              <div style={{ display:'flex', gap:'0.75rem' }}>
+                 <input 
+                  className="input-field" 
+                  value={chatInput} 
+                  onChange={e => setChatInput(e.target.value)} 
+                  onKeyDown={e => e.key === 'Enter' && handleSendGlobal()}
+                  placeholder="Share a message with everyone..." 
+                  style={{ height:46, fontSize:'0.9rem' }}
+                 />
+                 <button className="btn btn-primary" style={{ width:46, height:46, padding:0, borderRadius:12 }} onClick={handleSendGlobal}><Send size={18}/></button>
+              </div>
+           </div>
+        </motion.div>
       )}
     </div>
   );

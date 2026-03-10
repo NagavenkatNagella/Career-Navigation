@@ -96,3 +96,25 @@ export interface LearningResource {
     difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
     matchScore: number;
 }
+
+export interface Post {
+    id: string;
+    authorId: string;
+    authorName: string;
+    text: string;
+    timestamp: string;
+    fileUrl?: string;
+    fileName?: string;
+    likes?: string[]; // user IDs
+    comments?: { id: string, authorName: string, text: string, timestamp: string }[];
+}
+
+export interface CommunityMessage {
+    id: string;
+    senderId: string;
+    senderName: string;
+    text: string;
+    timestamp: string;
+    fileUrl?: string;
+    fileName?: string;
+}
