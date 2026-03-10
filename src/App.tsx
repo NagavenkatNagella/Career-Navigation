@@ -4,7 +4,7 @@ import {
   BrainCircuit, Target, Map, BookOpen, Users,
   ChevronRight, Zap, CheckCircle2, AlertCircle, TrendingUp,
   Award, Globe, Rocket, ShieldCheck, Cloud, Briefcase,
-  Star, BarChart3, Lock, Menu, X
+  Star, BarChart3, Lock, Menu, X, RefreshCw, User
 } from 'lucide-react';
 import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis,
@@ -14,6 +14,15 @@ import {
 import type { CareerPathType, UserProfile } from './types';
 import { CAREER_PATHS, QUESTIONS_BY_PATH, ROADMAPS, INDUSTRY_TRENDS } from './data/careerData';
 import './index.css';
+
+import { auth, db, googleProvider } from './firebase';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithPopup
+} from 'firebase/auth';
+import { doc, getDoc, setDoc, collection, query, getDocs, where } from 'firebase/firestore';
 
 // ─── Motion Variants ─────────────────────────────────────────
 const fadeUp: Variants = {
@@ -30,20 +39,22 @@ const scaleIn: Variants = {
 };
 
 // ─── Helpers ────────────────────────────────────────────────
-const ICONS: Record<CareerPathType, ReactNode> = {
+const ICONS: Record<string, ReactNode> = {
   'software-dev':   <Rocket size={22} />,
   'data-science':   <Briefcase size={22} />,
   'cybersecurity':  <ShieldCheck size={22} />,
   'ai-ml':          <BrainCircuit size={22} />,
-  'cloud-computing':<Cloud size={22} />
+  'cloud-eng':      <Cloud size={22} />,
+  'ui-ux':          <Map size={22} />
 };
 
-const CAREER_COLORS: Record<CareerPathType, string> = {
+const CAREER_COLORS: Record<string, string> = {
   'software-dev':   '#38bdf8',
   'data-science':   '#a78bfa',
-  'cybersecurity':  '#34d399',
-  'ai-ml':          '#f472b6',
-  'cloud-computing':'#fb923c'
+  'cybersecurity':  '#ef4444',
+  'ai-ml':          '#f59e0b',
+  'cloud-eng':      '#10b981',
+  'ui-ux':          '#ec4899'
 };
 
 const SAMPLE_GROWTH = [
@@ -54,47 +65,178 @@ const SAMPLE_GROWTH = [
 
 // ─── App Root ────────────────────────────────────────────────
 export default function App() {
-  const [view, setView]       = useState<'splash'|'login'|'onboarding'|'assessment'|'main'>('splash');
+  const [view, setView] = useState<'splash' | 'role-selection' | 'login' | 'onboarding' | 'assessment' | 'main'>('splash');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [role, setRole] = useState<'user' | 'mentor'>('user');
 
   const [user, setUser] = useState<UserProfile>({
     name: '', education: '', goal: 'software-dev',
     experienceLevel: 'beginner',
-    skills: { Fundamentals:0, 'Core Skills':0, 'Advanced Concepts':0, Tools:0, 'Industry Prep':0 }
+    skills: { Fundamentals: 0, 'Core Skills': 0, 'Advanced Concepts': 0, Tools: 0, 'Industry Prep': 0 }
   });
 
-  const [qIdx,  setQIdx]  = useState(0);
+  const [qIdx, setQIdx] = useState(0);
   const [score, setScore] = useState(0);
+  const [globalError, setGlobalError] = useState<string | null>(null);
 
   useEffect(() => {
-    const t = setTimeout(() => setView('login'), 3200);
-    return () => clearTimeout(t);
+    const splashTimer = setTimeout(() => {
+      if (view === 'splash') setView('role-selection');
+    }, 1800);
+
+    const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
+      if (authUser) {
+        try {
+          // If we are already in main or assessment, don't interrupt
+          if (view === 'main' || view === 'assessment') return;
+
+          const userDoc = await getDoc(doc(db, 'users', authUser.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            console.log("Auth System: Profile confirmed", userData);
+            
+            const dbRole = userData.role as 'user' | 'mentor' || 'user';
+            setRole(dbRole);
+            
+            setUser(prev => ({ 
+              ...prev, 
+              name: userData.name || authUser.displayName || '',
+              education: userData.education || prev.education,
+              goal: userData.goal || prev.goal,
+              skills: userData.skills || prev.skills,
+              bio: userData.bio || prev.bio,
+              role: dbRole,
+              onboarded: !!userData.onboarded
+            }));
+
+            if (userData.onboarded) {
+              setView('main');
+              setActiveTab(dbRole === 'mentor' ? 'mentor-stats' : 'dashboard');
+            } else if (view === 'splash' || view === 'role-selection' || view === 'login') {
+              setView('onboarding');
+            }
+            clearTimeout(splashTimer);
+          } else {
+            if (view === 'splash') setView('role-selection');
+          }
+        } catch (err: any) {
+          console.error("Auth state fetch failed:", err);
+          // If Firestore fails but Auth is valid, still try to onboard if we're on login screen
+          if (view === 'login' || view === 'splash') {
+            setView('onboarding');
+          }
+          
+          if (err.message?.includes('offline') || err.message?.includes('network')) {
+            setGlobalError("Connectivity issue detected. Syncing in background...");
+          }
+        }
+      }
+    });
+    return () => {
+      clearTimeout(splashTimer);
+      unsubscribe();
+    };
   }, []);
 
-  const handleOnboardingDone = (name:string, edu:string, goal:CareerPathType) => {
-    setUser(p => ({ ...p, name, education:edu, goal }));
-    setQIdx(0); setScore(0);
-    setView('assessment');
+  useEffect(() => {
+    if (globalError) {
+      const timer = setTimeout(() => setGlobalError(null), 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [globalError]);
+
+  const handleLoginSucceed = async (selectedRole: 'user' | 'mentor', isOnboarded?: boolean) => {
+    setRole(selectedRole);
+    try {
+      if (auth.currentUser) {
+        // If we already know the status from LoginScreen, use it
+        if (isOnboarded === true) {
+          setView('main');
+          setActiveTab(selectedRole === 'mentor' ? 'mentor-stats' : 'dashboard');
+          return;
+        }
+
+        // Secondary verification: fetch doc if status is unknown or false
+        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          if (userData.onboarded) {
+            setView('main');
+            setActiveTab(selectedRole === 'mentor' ? 'mentor-stats' : 'dashboard');
+            return;
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error("Login verification failed:", err);
+    }
+    setView('onboarding');
   };
 
-  const handleAnswer = (opt: number) => {
+  const handleOnboardingDone = async (name: string, edu: string, goal: CareerPathType, additionalData?: any) => {
+    setUser(p => ({ ...p, name, education: edu, goal }));
+    
+    try {
+      if (auth.currentUser) {
+        let userData: any = {
+          name,
+          education: edu,
+          goal,
+          ...additionalData,
+          onboarded: true
+        };
+
+        if (role !== 'mentor') {
+          userData.skills = {
+            Fundamentals: 45,
+            'Core Skills': 30,
+            'Advanced Concepts': 10,
+            Tools: 25,
+            'Industry Prep': 15
+          };
+          setUser(p => ({ ...p, skills: userData.skills }));
+        }
+
+        await setDoc(doc(db, 'users', auth.currentUser.uid), userData, { merge: true });
+      }
+    } catch (err: any) {
+      console.error("Onboarding sync failed:", err);
+      // Still allow them to enter the dashboard if sync fails locally
+      setGlobalError("Profile saved locally. Syncing to cloud in background...");
+    }
+
+    if (role === 'mentor') {
+      setView('main');
+      setActiveTab('mentor-stats');
+    } else {
+      setView('main');
+      setActiveTab('dashboard');
+    }
+  };
+
+  const handleAnswer = async (opt: number) => {
     const qs = QUESTIONS_BY_PATH[user.goal];
     const ns = score + (opt === qs[qIdx].correctAnswer ? 1 : 0);
     if (qIdx < qs.length - 1) { setScore(ns); setQIdx(p => p+1); }
     else {
       const base = (ns / qs.length) * 80;
-      setUser(p => ({
-        ...p,
-        skills: {
-          Fundamentals: Math.min(100, base + 12),
-          'Core Skills': Math.min(100, base),
-          'Advanced Concepts': Math.max(8, base - 20),
-          Tools: 42,
-          'Industry Prep': 14
-        }
-      }));
+      const finalSkills = {
+        Fundamentals: Math.min(100, base + 12),
+        'Core Skills': Math.min(100, base),
+        'Advanced Concepts': Math.max(8, base - 20),
+        Tools: 42,
+        'Industry Prep': 14
+      };
+      setUser(p => ({ ...p, skills: finalSkills }));
       setScore(ns);
+      
+      if (auth.currentUser) {
+        await setDoc(doc(db, 'users', auth.currentUser.uid), {
+          skills: finalSkills
+        }, { merge: true });
+      }
+
       setView('main');
       setActiveTab('dashboard');
     }
@@ -106,10 +248,44 @@ export default function App() {
       <div className="bg-canvas" />
       <div className="bg-grid" />
 
+      {/* Connectivity Alert */}
+      <AnimatePresence>
+        {globalError && (
+          <motion.div 
+            initial={{ y: -50, opacity: 0 }} 
+            animate={{ y: 0, opacity: 1 }} 
+            exit={{ y: -50, opacity: 0 }}
+            style={{ 
+              position: 'fixed', top: '1rem', left: '50%', transform: 'translateX(-50%)', 
+              zIndex: 10000, 
+              background: globalError.includes('Syncing') ? 'rgba(56, 189, 248, 0.9)' : 'rgba(239, 68, 68, 0.9)', 
+              backdropFilter: 'blur(8px)',
+              padding: '0.75rem 1.5rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)',
+              display: 'flex', alignItems: 'center', gap: '1rem', boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
+            }}
+          >
+            {globalError.includes('Syncing') ? <RefreshCw size={20} color="#fff" className="animate-spin" /> : <AlertCircle size={20} color="#fff" />}
+            <span style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 600 }}>{globalError}</span>
+            <button onClick={() => setGlobalError(null)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', opacity: 0.7, display: 'flex' }}>
+              <X size={16} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence mode="wait">
         {view === 'splash'      && <SplashScreen key="splash" />}
-        {view === 'login'       && <LoginScreen key="login" onLogin={() => setView('onboarding')} />}
-        {view === 'onboarding'  && <OnboardingScreen key="ob" onDone={handleOnboardingDone} />}
+        {view === 'role-selection' && (
+          <RoleSelectionScreen 
+            key="role" 
+            onSelect={(selectedRole: 'user' | 'mentor') => {
+              setRole(selectedRole);
+              setView('login');
+            }} 
+          />
+        )}
+        {view === 'login'       && <LoginScreen key="login" role={role} onLogin={handleLoginSucceed} />}
+        {view === 'onboarding'  && <OnboardingScreen key="ob" role={role} onDone={handleOnboardingDone} />}
         {view === 'assessment'  && (
           <AssessmentScreen
             key="as"
@@ -119,46 +295,66 @@ export default function App() {
           />
         )}
         {view === 'main' && (
-          <motion.div key="main" initial={{ opacity:0 }} animate={{ opacity:1 }} style={{ position:'relative', zIndex:1 }}>
+          <motion.div key="main" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ position: 'relative', zIndex: 1 }}>
             {/* NAVBAR */}
-            <nav className="navbar" style={{ position:'sticky', top:0, zIndex:200 }}>
-              <div className="container flex items-center justify-between" style={{ height:'68px' }}>
+            <nav className="navbar" style={{ position: 'sticky', top: 0, zIndex: 200 }}>
+              <div className="container flex items-center justify-between" style={{ height: '68px' }}>
                 <div className="flex items-center gap-3">
-                  <div style={{ width:40, height:40, borderRadius:10, overflow:'hidden', background:'rgba(255,255,255,0.05)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    <img src="/logo.png" alt="Logo" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                  <div style={{ width: 40, height: 40, borderRadius: 10, overflow: 'hidden', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <img src="/logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
-                  <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.15rem', letterSpacing:'-0.03em' }}>
-                    Skill<span style={{ color:'var(--accent-1)' }}>Bridge</span> <span style={{ fontSize:'0.7rem', fontWeight:700, color:'var(--text-muted)', letterSpacing:'0.1em' }}>AI</span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.15rem', letterSpacing: '-0.03em' }}>
+                    Skill<span style={{ color: 'var(--accent-1)' }}>Bridge</span> <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>{role === 'mentor' ? 'MENTOR' : 'AI'}</span>
                   </span>
                 </div>
 
                 {/* Desktop tabs */}
-                <div className="flex gap-2 hide-mobile" style={{ background:'rgba(255,255,255,0.03)', borderRadius:999, padding:'0.35rem', border:'1px solid var(--border-subtle)' }}>
-                  {[
-                    { id:'dashboard',       icon:<Target size={15}/>,     label:'Dashboard' },
-                    { id:'path',            icon:<Map size={15}/>,        label:'Roadmap' },
-                    { id:'recommendations', icon:<BookOpen size={15}/>,   label:'Resources' },
-                    { id:'mentors',         icon:<Users size={15}/>,      label:'Mentors' },
-                  ].map(t => (
-                    <button key={t.id} className={`nav-tab ${activeTab===t.id?'active':''}`} onClick={() => setActiveTab(t.id)}>
-                      {t.icon}<span className="nav-labels">{t.label}</span>
-                    </button>
-                  ))}
+                <div className="flex gap-2 hide-mobile" style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 999, padding: '0.35rem', border: '1px solid var(--border-subtle)' }}>
+                  {(role === 'mentor'
+                    ? [
+                      { id: 'mentor-stats', icon: <TrendingUp size={15} />, label: 'Analytics' },
+                      { id: 'mentor-users', icon: <Users size={15} />, label: 'User Progress' },
+                      { id: 'profile', icon: <User size={15} />, label: 'Profile' }
+                    ]
+                    : [
+                      { id: 'dashboard', icon: <Target size={15} />, label: 'Dashboard' },
+                      { id: 'path', icon: <Map size={15} />, label: 'Roadmap' },
+                      { id: 'recommendations', icon: <BookOpen size={15} />, label: 'Resources' },
+                      { id: 'mentors', icon: <Users size={15} />, label: 'Mentors' },
+                      { id: 'profile', icon: <User size={15} />, label: 'Profile' }
+                    ]).map(t => (
+                      <button key={t.id} className={`nav-tab ${activeTab === t.id ? 'active' : ''}`} onClick={() => setActiveTab(t.id)}>
+                        {t.icon}<span className="nav-labels">{t.label}</span>
+                      </button>
+                    ))}
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <div className="hide-mobile" style={{ textAlign:'right' }}>
-                    <div style={{ fontWeight:700, fontSize:'0.875rem' }}>{user.name}</div>
-                    <div style={{ fontSize:'0.7rem', color:'var(--accent-1)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.05em' }}>
-                      {CAREER_PATHS[user.goal].label}
+                  <div className="hide-mobile" style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>{user.name || (role === 'mentor' ? 'Admin Mentor' : 'Learner')}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--accent-1)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      {role === 'mentor' ? 'Expert Guide' : CAREER_PATHS[user.goal].label}
                     </div>
                   </div>
-                  <div className="animate-glowPulse" style={{ width:40, height:40, borderRadius:12, background:'linear-gradient(135deg,#38bdf8,#7c3aed)', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:800, fontSize:'0.9rem', color:'#fff' }}>
-                    {user.name?user.name[0].toUpperCase():'U'}
-                  </div>
-                  {/* Mobile hamburger */}
-                  <button className="btn-icon" style={{ display:'none' }} onClick={() => setMobileMenu(p=>!p)} aria-label="menu">
-                    {mobileMenu ? <X size={20}/> : <Menu size={20}/>}
+                  <button 
+                    onClick={() => setActiveTab('profile')}
+                    className="animate-glowPulse" 
+                    style={{ 
+                      width: 40, height: 40, borderRadius: 12, 
+                      background: activeTab === 'profile' ? '#fff' : 'linear-gradient(135deg,#38bdf8,#7c3aed)', 
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                      fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.9rem', 
+                      color: activeTab === 'profile' ? 'var(--accent-1)' : '#fff',
+                      border: 'none', cursor: 'pointer', transition: 'all 0.3s'
+                    }}
+                  >
+                    {(user.name ? user.name[0] : (role === 'mentor' ? 'M' : 'L')).toUpperCase()}
+                  </button>
+                  <button className="btn btn-ghost btn-icon show-mobile" onClick={() => setMobileMenu(!mobileMenu)} aria-label="Toggle Menu">
+                    {mobileMenu ? <X size={20} /> : <Menu size={20} />}
+                  </button>
+                  <button className="btn btn-ghost btn-icon hide-mobile" onClick={() => { auth.signOut(); setView('login'); }} title="Sign Out">
+                    <Lock size={18} />
                   </button>
                 </div>
               </div>
@@ -166,24 +362,29 @@ export default function App() {
               {/* Mobile menu */}
               <AnimatePresence>
                 {mobileMenu && (
-                  <motion.div initial={{ height:0, opacity:0 }} animate={{ height:'auto', opacity:1 }} exit={{ height:0, opacity:0 }} style={{ overflow:'hidden', borderTop:'1px solid var(--border-subtle)', padding:'0.75rem', background:'rgba(2,8,23,0.95)' }}>
-                    {['dashboard','path','recommendations','mentors'].map(t => (
-                      <button key={t} onClick={() => { setActiveTab(t); setMobileMenu(false); }} style={{ display:'block', width:'100%', textAlign:'left', padding:'0.75rem 1rem', borderRadius:12, fontWeight:600, color: activeTab===t ? 'var(--accent-1)':'var(--text-muted)', background: activeTab===t ? 'rgba(56,189,248,0.1)':'transparent', marginBottom:4 }}>
-                        {t.charAt(0).toUpperCase()+t.slice(1)}
-                      </button>
-                    ))}
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden', borderTop: '1px solid var(--border-subtle)', padding: '0.75rem', background: 'rgba(2,8,23,0.95)' }}>
+                    {(role === 'mentor'
+                      ? ['mentor-stats', 'mentor-users', 'profile']
+                      : ['dashboard', 'path', 'recommendations', 'mentors', 'profile']).map(t => (
+                        <button key={t} onClick={() => { setActiveTab(t); setMobileMenu(false); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.75rem 1rem', borderRadius: 12, fontWeight: 600, color: activeTab === t ? 'var(--accent-1)' : 'var(--text-muted)', background: activeTab === t ? 'rgba(56,189,248,0.1)' : 'transparent', marginBottom: 4 }}>
+                          {t.replace('mentor-', '').charAt(0).toUpperCase() + t.replace('mentor-', '').slice(1)}
+                        </button>
+                      ))}
                   </motion.div>
                 )}
               </AnimatePresence>
             </nav>
 
             {/* MAIN CONTENT */}
-            <main className="container" style={{ paddingTop:'2rem', paddingBottom:'4rem', position:'relative', zIndex:1 }}>
+            <main className="container" style={{ paddingTop: '2rem', paddingBottom: '4rem', position: 'relative', zIndex: 1 }}>
               <AnimatePresence mode="wait">
                 {activeTab === 'dashboard' && <DashboardTab key="db" user={user} score={score} setActiveTab={setActiveTab} />}
-                {activeTab === 'path'      && <RoadmapTab  key="rt" user={user} />}
+                {activeTab === 'path' && <RoadmapTab key="rt" user={user} />}
                 {activeTab === 'recommendations' && <ResourcesTab key="res" user={user} />}
-                {activeTab === 'mentors'   && <MentorsTab  key="mt" user={user} />}
+                {activeTab === 'mentors' && <MentorsTab key="mt" user={user} />}
+                {activeTab === 'profile' && <ProfileTab key="prof" user={user} role={role} setUser={setUser} />}
+                {activeTab === 'mentor-stats' && <MentorDashboard key="mstats" />}
+                {activeTab === 'mentor-users' && <MentorUserManagement key="musers" />}
               </AnimatePresence>
             </main>
           </motion.div>
@@ -229,7 +430,7 @@ function SplashScreen() {
       key="sp"
       initial={{ opacity: 1 }}
       exit={{ opacity: 0, scale: 1.1, filter: 'blur(15px)' }}
-      transition={{ duration: 1.5, ease: [0.7, 0, 0.3, 1] }}
+      transition={{ duration: 0.8, ease: [0.7, 0, 0.3, 1] }}
       style={{ 
         position: 'fixed', 
         inset: 0, 
@@ -512,100 +713,429 @@ function SplashScreen() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ROLE SELECTION SCREEN
+// ═══════════════════════════════════════════════════════════════
+function RoleSelectionScreen({ onSelect }: { onSelect: (role: 'user' | 'mentor') => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 1.1, filter: 'blur(10px)' }}
+      style={{ 
+        minHeight: '100vh', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        padding: '2rem',
+        position: 'relative',
+        zIndex: 10
+      }}
+    >
+      <div className="orb orb-blue" style={{ width: 600, height: 600, top: '-20%', left: '-10%', opacity: 0.3 }} />
+      <div className="orb orb-purple" style={{ width: 500, height: 500, bottom: '-10%', right: '-5%', opacity: 0.3 }} />
+
+      <motion.div 
+        variants={fadeUp} initial="hidden" animate="visible"
+        style={{ textAlign: 'center', marginBottom: '4rem' }}
+      >
+        <div className="badge badge-blue" style={{ marginBottom: '1.5rem' }}>Get Started</div>
+        <h1 style={{ 
+          fontFamily: 'var(--font-display)', 
+          fontSize: 'clamp(2.5rem, 5vw, 4rem)', 
+          fontWeight: 900, 
+          letterSpacing: '-0.04em',
+          marginBottom: '1rem'
+        }}>
+          Choose Your <span style={{ background: 'linear-gradient(135deg,#38bdf8,#7c3aed)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Bridge</span>
+        </h1>
+        <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem', maxWidth: '600px' }}>
+          Are you looking to accelerate your career growth or ready to guide the next generation of industry leaders?
+        </p>
+      </motion.div>
+
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
+        gap: '2rem', 
+        width: '100%', 
+        maxWidth: '900px' 
+      }}>
+        {/* Learner Option */}
+        <motion.div 
+          whileHover={{ y: -10, scale: 1.02 }}
+          onClick={() => onSelect('user')}
+          className="grad-border"
+          style={{ cursor: 'pointer' }}
+        >
+          <div className="glass" style={{ padding: '3rem 2rem', textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ width: 80, height: 80, borderRadius: 24, background: 'rgba(56,189,248,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-1)', marginBottom: '2rem' }}>
+              <Rocket size={40} />
+            </div>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800, marginBottom: '1rem' }}>Learner</h2>
+            <p style={{ color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '2rem' }}>
+              Access AI-driven roadmaps, personalized assessments, and a vast network of industry mentors to reach your career goals.
+            </p>
+            <div className="btn btn-primary" style={{ marginTop: 'auto', width: '100%' }}>I want to learn</div>
+          </div>
+        </motion.div>
+
+        {/* Mentor Option */}
+        <motion.div 
+          whileHover={{ y: -10, scale: 1.02 }}
+          onClick={() => onSelect('mentor')}
+          className="grad-border"
+          style={{ cursor: 'pointer' }}
+        >
+          <div className="glass" style={{ padding: '3rem 2rem', textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ width: 80, height: 80, borderRadius: 24, background: 'rgba(124,58,237,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-2)', marginBottom: '2rem' }}>
+              <Users size={40} />
+            </div>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800, marginBottom: '1rem' }}>Mentor</h2>
+            <p style={{ color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '2rem' }}>
+              Share your expertise, track learner progress, and help shape the future of talent in the industry.
+            </p>
+            <div className="btn btn-primary" style={{ marginTop: 'auto', width: '100%', background: 'linear-gradient(135deg,#7c3aed,#ec4899)' }}>I want to mentor</div>
+          </div>
+        </motion.div>
+      </div>
+
+      <motion.p 
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }}
+        style={{ marginTop: '4rem', fontSize: '0.875rem', color: 'var(--text-hint)' }}
+      >
+        You can always switch your perspective later.
+      </motion.p>
+    </motion.div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 // LOGIN SCREEN
 // ═══════════════════════════════════════════════════════════════
-function LoginScreen({ onLogin }: { onLogin:()=>void }) {
-  const [email,    setEmail]    = useState('');
+function LoginScreen({ role, onLogin }: { role: 'user' | 'mentor'; onLogin: (role: 'user' | 'mentor', onboarded?: boolean) => void }) {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [tab,      setTab]      = useState<'signin'|'signup'>('signin');
+  const [tab, setTab] = useState<'signin' | 'signup'>('signin');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('');
+  const [msgIndex, setMsgIndex] = useState(0);
+  const loadingMsgs = [
+    "Authenticating...",
+    "Scanning user records...",
+    "Synchronizing cloud data...",
+    "Optimizing your dashboard...",
+    "Almost there..."
+  ];
+
+  useEffect(() => {
+    let interval: any;
+    if (loading && !isSuccess) {
+      interval = setInterval(() => {
+        setMsgIndex(prev => (prev + 1) % loadingMsgs.length);
+      }, 600); // Faster cycling for 'speed' perception
+    }
+    return () => clearInterval(interval);
+  }, [loading, isSuccess]);
+
+  const triggerSuccess = (finalRole: 'user' | 'mentor', onboarded: boolean = false) => {
+    setStatusMsg(`Welcome, ${auth.currentUser?.displayName?.split(' ')[0] || 'User'}!`);
+    setIsSuccess(true);
+    setTimeout(() => {
+      onLogin(finalRole, onboarded);
+    }, 300); // Ultra snappy 300ms redirect
+  };
+
+  const handleAuth = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      if (tab === 'signup') {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        await setDoc(doc(db, 'users', user.uid), {
+          email: user.email,
+          role: role,
+          createdAt: new Date().toISOString()
+        });
+        triggerSuccess(role, false);
+      } else {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          triggerSuccess(data.role as 'user' | 'mentor' || 'user', !!data.onboarded);
+        } else {
+          triggerSuccess('user', false);
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || 'Authentication failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleAuth = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      console.log("Initiating Google Sign-In...");
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      console.log("Auth success, checking Firestore for user:", user.uid);
+
+      setLoading(true); // Keep loading state until success overlay
+      setStatusMsg("Verifying your profile...");
+      
+      let userDoc;
+      try {
+        userDoc = await getDoc(doc(db, 'users', user.uid));
+      } catch (dbErr: any) {
+        console.warn("Firestore fetch error:", dbErr);
+      }
+
+      let finalRole = role;
+      let isOnboarded = false;
+      if (userDoc?.exists()) {
+        const data = userDoc.data();
+        finalRole = data.role as 'user' | 'mentor' || 'user';
+        isOnboarded = !!data.onboarded;
+        console.log("Existing user found with role:", finalRole);
+        setStatusMsg("Restoring your workspace...");
+      } else {
+        console.log("New user detected, initializing profile...");
+        setStatusMsg("Setting up your new profile...");
+        try {
+          await setDoc(doc(db, 'users', user.uid), {
+            email: user.email,
+            name: user.displayName || '',
+            role: role,
+            createdAt: new Date().toISOString()
+          });
+        } catch (setErr: any) {
+          console.error("Failed to create user doc:", setErr);
+        }
+      }
+      
+      setStatusMsg("Login successful!");
+      triggerSuccess(finalRole, isOnboarded);
+    } catch (err: any) {
+      console.error("Google Auth Full Error:", err);
+      if (err.code === 'auth/popup-closed-by-user') {
+        setError('Sign-in popup was closed. Please try again.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setError('This domain is not authorized for Google Sign-In. Please add it in Firebase Console.');
+      } else if (err.code === 'auth/operation-not-allowed') {
+        setError('Google Sign-In is not enabled in your Firebase project.');
+      } else {
+        setError(err.message || 'Google authentication failed');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <motion.div
-      initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0, scale:0.97 }}
-      style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:'2rem 1rem', position:'relative', zIndex:1 }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.97 }}
+      style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem', position: 'relative', zIndex: 1 }}
     >
-      {/* Decorative orbs */}
-      <div className="orb orb-blue" style={{ width:600, height:600, top:'-25%', right:'-20%', opacity:0.5, position:'fixed' }} />
-      <div className="orb orb-purple" style={{ width:500, height:500, bottom:'-20%', left:'-15%', opacity:0.5, position:'fixed' }} />
+      {/* Processing & Success Overlay */}
+      <AnimatePresence>
+        {(loading || isSuccess) && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 1000,
+              background: 'rgba(2,8,23,0.92)',
+              backdropFilter: 'blur(12px)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '2.5rem'
+            }}
+          >
+            {!isSuccess ? (
+              <div style={{ position: 'relative', width: 140, height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {/* Background Shard Particles */}
+                {[...Array(6)].map((_, i) => (
+                  <motion.div
+                    key={i}
+                    animate={{ 
+                      scale: [0, 1, 0],
+                      x: [0, (i % 2 === 0 ? 1 : -1) * 80],
+                      y: [0, (i < 3 ? 1 : -1) * 80],
+                      rotate: [0, 180]
+                    }}
+                    transition={{ duration: 2, repeat: Infinity, delay: i * 0.3 }}
+                    style={{ 
+                      position: 'absolute', width: 4, height: 4, 
+                      background: 'var(--accent-1)', borderRadius: '50%',
+                      filter: 'blur(1px)'
+                    }}
+                  />
+                ))}
 
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'4rem', maxWidth:980, width:'100%', alignItems:'center' }}>
+                {/* Advanced triple ring loader */}
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+                  style={{
+                    position: 'absolute', inset: 0,
+                    borderRadius: '50%',
+                    border: '3px solid transparent',
+                    borderTopColor: 'var(--accent-1)',
+                    filter: 'drop-shadow(0 0 8px var(--accent-1))'
+                  }}
+                />
+                <motion.div
+                  animate={{ rotate: -360 }}
+                  transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
+                  style={{
+                    position: 'absolute', inset: 12,
+                    borderRadius: '50%',
+                    border: '3px solid transparent',
+                    borderTopColor: 'var(--accent-2)',
+                    opacity: 0.7
+                  }}
+                />
+                <motion.div
+                  animate={{ scale: [1, 1.3, 1], rotate: [0, 360] }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                >
+                  <BrainCircuit size={40} className="gradient-text" style={{ filter: 'drop-shadow(0 0 15px rgba(56,189,248,0.6))' }} />
+                </motion.div>
+              </div>
+            ) : (
+              <motion.div
+                initial={{ scale: 0, rotate: -45 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+                style={{
+                  width: 120, height: 120, borderRadius: '50%',
+                  background: 'var(--grad-primary)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: 'var(--glow-primary)'
+                }}
+              >
+                <motion.svg
+                  width="70" height="70" viewBox="0 0 24 24" fill="none"
+                  stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"
+                >
+                  <motion.path
+                    initial={{ pathLength: 0 }}
+                    animate={{ pathLength: 1 }}
+                    transition={{ duration: 0.6, delay: 0.3 }}
+                    d="M20 6L9 17L4 12"
+                  />
+                </motion.svg>
+              </motion.div>
+            )}
+
+            <motion.div
+              style={{ textAlign: 'center', minHeight: '80px' }}
+            >
+              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', fontWeight: 800, marginBottom: '0.5rem' }}>
+                {isSuccess ? "Identity Verified" : "Accessing SkillBridge"}
+              </h2>
+              <AnimatePresence mode="wait">
+                <motion.p
+                  key={isSuccess ? 'success' : loadingMsgs[msgIndex]}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.05 }}
+                  transition={{ duration: 0.3 }}
+                  style={{ 
+                    color: 'var(--text-secondary)', 
+                    fontSize: '1.25rem', 
+                    letterSpacing: '0.02em', 
+                    fontWeight: 600,
+                    textShadow: '0 0 20px rgba(56,189,248,0.2)'
+                  }}
+                >
+                  {isSuccess ? statusMsg : loadingMsgs[msgIndex]}
+                </motion.p>
+              </AnimatePresence>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* Decorative orbs */}
+      <div className="orb orb-blue" style={{ width: 600, height: 600, top: '-25%', right: '-20%', opacity: 0.5, position: 'fixed' }} />
+      <div className="orb orb-purple" style={{ width: 500, height: 500, bottom: '-20%', left: '-15%', opacity: 0.5, position: 'fixed' }} />
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4rem', maxWidth: 980, width: '100%', alignItems: 'center' }}>
         {/* Left hero */}
         <motion.div variants={stagger} initial="hidden" animate="visible" className="hide-mobile">
-          <motion.div variants={fadeUp} className="badge badge-blue" style={{ marginBottom:'1.5rem' }}>
-            <Zap size={12} /> Powered by AI
+          <motion.div variants={fadeUp} className="badge badge-blue" style={{ marginBottom: '1.5rem' }}>
+            <Zap size={12} /> {role === 'mentor' ? 'Expert Portal' : 'Powered by AI'}
           </motion.div>
-          <motion.h1 variants={fadeUp} style={{ fontFamily:'var(--font-display)', fontSize:'clamp(2rem,4vw,3.2rem)', fontWeight:900, letterSpacing:'-0.04em', lineHeight:1.1, marginBottom:'1.25rem' }}>
-            Bridge the gap between learning &<br />
-            <span style={{ background:'linear-gradient(135deg,#38bdf8,#7c3aed)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
-              industry demand
-            </span>
+          <motion.h1 variants={fadeUp} style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(2rem,4vw,3.2rem)', fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1.1, marginBottom: '1.25rem' }}>
+            {role === 'mentor' ? 'Empower the next generation of professionals' : 'Bridge the gap between learning & industry demand'}
           </motion.h1>
-          <motion.p variants={fadeUp} style={{ color:'var(--text-muted)', lineHeight:1.8, marginBottom:'2rem', fontSize:'1rem' }}>
-            Intelligent, data-driven career navigation that aligns your aspirations with real market needs.
+          <motion.p variants={fadeUp} style={{ color: 'var(--text-muted)', lineHeight: 1.8, marginBottom: '2rem', fontSize: '1rem' }}>
+            {role === 'mentor' 
+              ? 'Join our network of elite mentors and help students navigate their career paths with real-world insights and guidance.'
+              : 'Intelligent, data-driven career navigation that aligns your aspirations with real market needs.'}
           </motion.p>
-          <motion.div variants={stagger} style={{ display:'flex', flexDirection:'column', gap:'0.85rem' }}>
-            {[
-              { icon:<Target size={18}/>, text:'Personalized skill gap analysis' },
-              { icon:<TrendingUp size={18}/>, text:'Real-time industry trend data' },
-              { icon:<Award size={18}/>, text:'AI-powered roadmap generation' },
-            ].map((f, i) => (
-              <motion.div key={i} variants={fadeUp} style={{ display:'flex', alignItems:'center', gap:'0.85rem', color:'var(--text-secondary)' }}>
-                <div style={{ width:36, height:36, borderRadius:10, background:'rgba(56,189,248,0.12)', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--accent-1)', flexShrink:0 }}>{f.icon}</div>
-                <span style={{ fontSize:'0.9rem', fontWeight:500 }}>{f.text}</span>
-              </motion.div>
-            ))}
-          </motion.div>
         </motion.div>
 
         {/* Right login card */}
         <motion.div variants={scaleIn} initial="hidden" animate="visible" className="grad-border">
-          <div className="glass" style={{ borderRadius:'var(--radius-lg)', padding:'2.5rem' }}>
-            {/* Tab toggle */}
-            <div style={{ display:'flex', background:'rgba(255,255,255,0.04)', borderRadius:999, padding:4, marginBottom:'2rem', border:'1px solid var(--border-subtle)' }}>
-              {(['signin','signup'] as const).map(t => (
-                <button key={t} onClick={() => setTab(t)} style={{ flex:1, padding:'0.6rem', borderRadius:999, fontWeight:700, fontSize:'0.85rem', fontFamily:'var(--font-display)', background:tab===t ? 'linear-gradient(135deg,#38bdf8,#7c3aed)' : 'transparent', color:tab===t ? '#fff':'var(--text-muted)', transition:'all 0.3s' }}>
-                  {t === 'signin' ? 'Sign In' : 'Create Account'}
-                </button>
-              ))}
-            </div>
-
-            <div style={{ display:'flex', justifyContent:'center', marginBottom:'1.75rem' }}>
-              <div style={{ width:60, height:60, borderRadius:16, overflow:'hidden', background:'rgba(255,255,255,0.05)', display:'flex', alignItems:'center', justifyContent:'center', border:'1px solid rgba(56,189,248,0.2)' }}>
-                <img src="/logo.png" alt="Logo" style={{ width:'80%', height:'80%', objectFit:'contain' }} />
+          <div className="glass" style={{ borderRadius: 'var(--radius-lg)', padding: '2.5rem' }}>
+            <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.8rem', borderRadius: '999px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                Accessing as <span style={{ color: role === 'mentor' ? 'var(--accent-2)' : 'var(--accent-1)', textTransform: 'uppercase' }}>{role}</span>
               </div>
             </div>
 
-            <div style={{ display:'flex', flexDirection:'column', gap:'1.25rem' }}>
-              {tab === 'signup' && (
-                <div className="input-wrap">
-                  <label className="input-label">Full Name</label>
-                  <input className="input-field" type="text" placeholder="John Doe" />
-                </div>
-              )}
-              <div className="input-wrap">
-                <label className="input-label">Email Address</label>
-                <input className="input-field" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@example.com" />
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.75rem' }}>
+              <div style={{ width: 60, height: 60, borderRadius: 16, overflow: 'hidden', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(56,189,248,0.2)' }}>
+                <img src="/logo.png" alt="Logo" style={{ width: '80%', height: '80%', objectFit: 'contain' }} />
               </div>
-              <div className="input-wrap">
-                <label className="input-label">Password</label>
-                <input className="input-field" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" />
-              </div>
+            </div>
 
-              <button className="btn btn-primary w-full" style={{ width:'100%', padding:'1rem', fontSize:'1rem', marginTop:'0.5rem' }} onClick={onLogin}>
-                {tab === 'signin' ? 'Sign In' : 'Create Account'} <ChevronRight size={18} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {error && <p style={{ color: '#ef4444', fontSize: '0.8rem', textAlign: 'center' }}>{error}</p>}
+              
+              <button className="btn btn-ghost w-full" style={{ width: '100%', padding: '1rem', fontSize: '1rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-subtle)' }} onClick={handleGoogleAuth} disabled={loading}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+                Continue with Google
               </button>
 
-              <div style={{ display:'flex', alignItems:'center', gap:'1rem' }}>
-                <div style={{ flex:1, height:1, background:'var(--border-subtle)' }} />
-                <span style={{ fontSize:'0.75rem', color:'var(--text-hint)', fontWeight:600 }}>OR</span>
-                <div style={{ flex:1, height:1, background:'var(--border-subtle)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', margin: '0.5rem 0' }}>
+                <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+                <span style={{ margin: '0 1rem', fontSize: '0.75rem', color: 'var(--text-hint)', fontWeight: 600 }}>OR</span>
+                <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
               </div>
 
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.75rem' }}>
-                {[{ icon:<Globe size={16}/>, label:'Google' }, { icon:<Users size={16}/>, label:'LinkedIn' }].map(s => (
-                  <button key={s.label} className="btn btn-ghost" style={{ width:'100%', padding:'0.75rem', fontSize:'0.875rem' }}>{s.icon}{s.label}</button>
+              {/* Tab toggle */}
+              <div style={{ display: 'flex', background: 'rgba(255,255,255,0.04)', borderRadius: '12px', padding: 4, border: '1px solid var(--border-subtle)' }}>
+                {(['signin', 'signup'] as const).map(t => (
+                  <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: '0.6rem', borderRadius: '10px', fontWeight: 700, fontSize: '0.85rem', fontFamily: 'var(--font-display)', background: tab === t ? 'rgba(255,255,255,0.1)' : 'transparent', color: tab === t ? '#fff' : 'var(--text-muted)', transition: 'all 0.3s' }}>
+                    {t === 'signin' ? 'Email Login' : 'Email Signup'}
+                  </button>
                 ))}
               </div>
+
+              <div className="input-wrap">
+                <input className="input-field" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email Address" />
+              </div>
+              <div className="input-wrap">
+                <input className="input-field" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" />
+              </div>
+
+              <button className="btn btn-primary w-full" style={{ width: '100%', padding: '0.85rem', fontSize: '1rem', marginTop: '0.25rem' }} onClick={handleAuth} disabled={loading}>
+                {loading ? 'Processing...' : tab === 'signin' ? 'Sign In' : 'Create Account'}
+              </button>
             </div>
           </div>
         </motion.div>
@@ -614,26 +1144,131 @@ function LoginScreen({ onLogin }: { onLogin:()=>void }) {
   );
 }
 
+
 // ═══════════════════════════════════════════════════════════════
 // ONBOARDING
 // ═══════════════════════════════════════════════════════════════
-function OnboardingScreen({ onDone }: { onDone:(n:string,e:string,g:CareerPathType)=>void }) {
-  const [name, setName]   = useState('');
+function OnboardingScreen({ role, onDone }: { role: 'user' | 'mentor'; onDone: (n: string, e: string, g: CareerPathType, extra?: any) => void }) {
+  const [name, setName]   = useState(auth.currentUser?.displayName || '');
   const [edu,  setEdu]    = useState('');
   const [goal, setGoal]   = useState<CareerPathType>('software-dev');
+  const [bio, setBio]     = useState('');
+  const [skills, setSkills] = useState<string[]>([]);
+  const [newSkill, setNewSkill] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  const EDU_SUGGESTIONS = [
+    'B.Tech CSE', 'B.Tech ECE', 'B.Com', 'BCA', 'MCA', 'BSc CS', 'MBA', 'M.Tech'
+  ];
+
+  const INTEREST_SUGGESTIONS = [
+    'Software Development', 'Data Science', 'Cloud Engineering', 'AI/ML', 'UI/UX Design', 'Cybersecurity'
+  ];
+
+
+  const handleAddSkill = () => {
+    if (newSkill && !skills.includes(newSkill)) {
+      setSkills([...skills, newSkill]);
+      setNewSkill('');
+    }
+  };
+
+  const removeSkill = (s: string) => setSkills(skills.filter(i => i !== s));
+
+  if (role === 'mentor') {
+    return (
+      <motion.div initial={{ opacity:0, x:40 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-40 }} transition={{ duration:0.5 }}
+        style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:'2rem 1rem', position:'relative', zIndex:1 }}
+      >
+        <div style={{ width:'100%', maxWidth:700 }}>
+          <motion.div variants={stagger} initial="hidden" animate="visible" className="glass" style={{ padding:'3rem' }}>
+            <motion.div variants={fadeUp} style={{ textAlign:'center', marginBottom:'2.5rem' }}>
+              <div style={{ width:70, height:70, borderRadius:20, overflow:'hidden', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(124,58,237,0.2)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 1.25rem' }}>
+                <img src="/logo.png" alt="Logo" style={{ width:'80%', height:'80%', objectFit:'contain' }} />
+              </div>
+              <h2 style={{ fontFamily:'var(--font-display)', fontSize:'2rem', fontWeight:800, marginBottom:'0.5rem' }}>Setup Mentor Profile</h2>
+              <p style={{ color:'var(--text-muted)' }}>Introduce yourself to the community and list your expertise.</p>
+            </motion.div>
+
+            <div style={{ display:'flex', flexDirection:'column', gap:'1.5rem' }}>
+              <motion.div variants={fadeUp} style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem' }}>
+                <div className="input-wrap">
+                  <label className="input-label">Professional Name</label>
+                  <input className="input-field" value={name} onChange={e=>setName(e.target.value)} placeholder="Dr. Sarah Chen" />
+                </div>
+                <div className="input-wrap">
+                  <label className="input-label">Current Role / Title</label>
+                  <input className="input-field" value={edu} onChange={e=>setEdu(e.target.value)} placeholder="Sr. Engineer @ Google" />
+                </div>
+              </motion.div>
+
+              <motion.div variants={fadeUp} className="input-wrap">
+                <label className="input-label">Professional Bio</label>
+                <textarea 
+                  className="input-field" 
+                  value={bio} 
+                  onChange={e=>setBio(e.target.value)} 
+                  placeholder="Tell learners about your journey..."
+                  style={{ minHeight: '100px', resize: 'vertical', padding: '1rem' }}
+                />
+              </motion.div>
+
+              <motion.div variants={fadeUp} className="input-wrap">
+                <label className="input-label">Expertise / Skills</label>
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                  <input 
+                    className="input-field" 
+                    value={newSkill} 
+                    onChange={e=>setNewSkill(e.target.value)} 
+                    placeholder="Add a skill (e.g. React, Python)"
+                    onKeyDown={e => e.key === 'Enter' && handleAddSkill()}
+                  />
+                  <button className="btn btn-primary" onClick={handleAddSkill} style={{ height: 'auto' }}>Add</button>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {skills.map(s => (
+                    <span key={s} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.8rem', borderRadius: '8px', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)', fontSize: '0.8rem', color: 'var(--accent-2)' }}>
+                      {s} <X size={14} style={{ cursor: 'pointer' }} onClick={() => removeSkill(s)} />
+                    </span>
+                  ))}
+                </div>
+              </motion.div>
+
+              <motion.button variants={fadeUp}
+                disabled={!name || !edu || skills.length === 0 || processing}
+                className="btn btn-primary"
+                style={{ width:'100%', padding:'1rem', fontSize:'1rem', marginTop:'0.5rem', background: 'linear-gradient(135deg,#7c3aed,#ec4899)' }}
+                onClick={async () => {
+                  setProcessing(true);
+                  try {
+                    await onDone(name, edu, goal, { bio, skills, role });
+                  } finally {
+                    setProcessing(false);
+                  }
+                }}
+              >
+                {processing ? 'Creating Profile...' : 'Complete Profile'} <ChevronRight size={18} />
+              </motion.button>
+            </div>
+          </motion.div>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div initial={{ opacity:0, x:40 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-40 }} transition={{ duration:0.5 }}
       style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', padding:'2rem 1rem', position:'relative', zIndex:1 }}
     >
       <div style={{ width:'100%', maxWidth:700 }}>
-        <motion.div variants={stagger} initial="hidden" animate="visible" className="glass" style={{ padding:'3rem' }}>
-          <motion.div variants={fadeUp} style={{ textAlign:'center', marginBottom:'2.5rem' }}>
-            <div style={{ width:70, height:70, borderRadius:20, overflow:'hidden', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(56,189,248,0.2)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 1.25rem' }}>
-              <img src="/logo.png" alt="Logo" style={{ width:'80%', height:'80%', objectFit:'contain' }} />
+        <motion.div variants={stagger} initial="hidden" animate="visible" className="glass" style={{ padding:'3.5rem', borderRadius: '24px' }}>
+          <motion.div variants={fadeUp} style={{ textAlign:'center', marginBottom:'3rem' }}>
+            <div style={{ width:80, height:80, borderRadius:22, overflow:'hidden', background:'rgba(56,189,248,0.1)', border:'1px solid rgba(56,189,248,0.2)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 1.5rem', boxShadow: '0 0 40px rgba(56,189,248,0.1)' }}>
+              <img src="/logo.png" alt="Logo" style={{ width:'75%', height:'75%', objectFit:'contain' }} />
             </div>
-            <h2 style={{ fontFamily:'var(--font-display)', fontSize:'2rem', fontWeight:800, marginBottom:'0.5rem' }}>Build Your Career DNA</h2>
-            <p style={{ color:'var(--text-muted)' }}>Tell us about yourself — we'll craft a personalized roadmap.</p>
+            <h2 style={{ fontFamily:'var(--font-display)', fontSize:'2.25rem', fontWeight:900, marginBottom:'0.75rem', letterSpacing: '-0.02em' }}>Professional Profile</h2>
+            <p style={{ color:'var(--text-muted)', fontSize: '1.05rem', maxWidth: '400px', margin: '0 auto' }}>Customize your professional journey with precision-mapped career paths.</p>
           </motion.div>
 
           <div style={{ display:'flex', flexDirection:'column', gap:'1.5rem' }}>
@@ -643,8 +1278,75 @@ function OnboardingScreen({ onDone }: { onDone:(n:string,e:string,g:CareerPathTy
                 <input className="input-field" value={name} onChange={e=>setName(e.target.value)} placeholder="Enter your name" />
               </div>
               <div className="input-wrap">
-                <label className="input-label">Education</label>
+                <label className="input-label">Education / Degree</label>
                 <input className="input-field" value={edu} onChange={e=>setEdu(e.target.value)} placeholder="e.g. B.Tech CSE" />
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.5rem' }}>
+                  {EDU_SUGGESTIONS.map(s => (
+                    <button 
+                      key={s} 
+                      onClick={() => setEdu(s)}
+                      style={{ 
+                        padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.7rem', 
+                        background: edu === s ? 'rgba(56,189,248,0.2)' : 'rgba(255,255,255,0.05)',
+                        border: `1px solid ${edu === s ? 'var(--accent-1)' : 'rgba(255,255,255,0.1)'}`,
+                        color: edu === s ? 'var(--accent-1)' : 'var(--text-muted)',
+                        cursor: 'pointer', transition: 'all 0.2s'
+                      }}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div variants={fadeUp} className="input-wrap">
+              <label className="input-label">Primary Interests / Goals</label>
+              <textarea 
+                className="input-field" 
+                value={bio} 
+                onChange={e=>setBio(e.target.value)} 
+                placeholder="What do you hope to achieve with SkillBridge? (e.g. Mastering Cloud, Career switch to AI...)"
+                style={{ minHeight: '80px', resize: 'vertical', padding: '1rem' }}
+              />
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.5rem' }}>
+                {INTEREST_SUGGESTIONS.map(s => (
+                  <button 
+                    key={s} 
+                    onClick={() => setBio(p => p ? (p.includes(s) ? p : p + ', ' + s) : s)}
+                    style={{ 
+                      padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.7rem', 
+                      background: bio.includes(s) ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.05)',
+                      border: `1px solid ${bio.includes(s) ? 'var(--accent-2)' : 'rgba(255,255,255,0.1)'}`,
+                      color: bio.includes(s) ? 'var(--accent-2)' : 'var(--text-muted)',
+                      cursor: 'pointer', transition: 'all 0.2s',
+                      textTransform: 'none'
+                    }}
+                  >
+                    + {s}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+
+            <motion.div variants={fadeUp} className="input-wrap">
+              <label className="input-label">Current Skills (Optional)</label>
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                <input 
+                  className="input-field" 
+                  value={newSkill} 
+                  onChange={e=>setNewSkill(e.target.value)} 
+                  placeholder="Add a skill you already have"
+                  onKeyDown={e => e.key === 'Enter' && handleAddSkill()}
+                />
+                <button className="btn btn-ghost" onClick={handleAddSkill} style={{ height: 'auto', padding: '0 1.25rem' }}>Add</button>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                {skills.map(s => (
+                  <span key={s} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.25rem 0.6rem', borderRadius: '6px', background: 'rgba(56,189,248,0.1)', border: '1px solid rgba(56,189,248,0.2)', fontSize: '0.75rem', color: 'var(--accent-1)' }}>
+                    {s} <X size={12} style={{ cursor: 'pointer' }} onClick={() => removeSkill(s)} />
+                  </span>
+                ))}
               </div>
             </motion.div>
 
@@ -674,13 +1376,34 @@ function OnboardingScreen({ onDone }: { onDone:(n:string,e:string,g:CareerPathTy
               </div>
             </motion.div>
 
+            {formError && <p style={{ color: '#ef4444', fontSize: '0.8rem', textAlign: 'center', marginBottom: '1rem', fontWeight: 600 }}>{formError}</p>}
+
             <motion.button variants={fadeUp}
-              disabled={!name || !edu}
+              disabled={processing}
               className="btn btn-primary"
-              style={{ width:'100%', padding:'1rem', fontSize:'1rem', marginTop:'0.5rem' }}
-              onClick={() => onDone(name, edu, goal)}
+              style={{ 
+                width:'100%', padding:'1.25rem', fontSize:'1.1rem', marginTop:'1rem',
+                boxShadow: (processing) ? 'none' : '0 10px 40px rgba(56,189,248,0.3)',
+                background: (processing) ? 'rgba(255,255,255,0.1)' : 'var(--btn-primary-bg)',
+                opacity: processing ? 0.7 : 1
+              }}
+              onClick={async () => {
+                if (!name || !edu || !bio || !goal) {
+                  setFormError('Please fill in all required fields (Name, Education, Bio, and Domain).');
+                  return;
+                }
+                setFormError('');
+                setProcessing(true);
+                try {
+                  await onDone(name, edu, goal, { bio, skills, role: 'user', onboardedAt: new Date().toISOString() });
+                } catch (err) {
+                  setFormError('Connection issue. Please try again.');
+                } finally {
+                  setProcessing(false);
+                }
+              }}
             >
-              Start My Assessment <ChevronRight size={18} />
+              {processing ? 'Synchronizing Profile...' : 'Complete Setup & Enter Dashboard'} <ChevronRight size={20} />
             </motion.button>
           </div>
         </motion.div>
@@ -1008,14 +1731,60 @@ function ResourcesTab({ user }: { user:UserProfile }) {
 // MENTORS TAB
 // ═══════════════════════════════════════════════════════════════
 function MentorsTab({ user }: { user:UserProfile }) {
-  const mentors = [
-    { name:'Sarah Chen',       role:'Sr. Engineer @ Google',    rating:4.9, sessions:120, tags:['System Design','Go','Cloud'], color:'#38bdf8' },
-    { name:'Marcus Thorne',    role:'Product Lead @ Meta',      rating:4.8, sessions:95,  tags:['Scale','Leadership','React'], color:'#a78bfa' },
-    { name:'Elena Rodriguez',  role:'AI Researcher @ OpenAI',   rating:5.0, sessions:60,  tags:['LLMs','PyTorch','Research'], color:'#10b981' },
-    { name:'Arjun Mehta',      role:'Staff Engineer @ Stripe',  rating:4.9, sessions:88,  tags:['Payments','Distributed','TS'], color:'#f59e0b' },
-    { name:'Nina Volkov',      role:'CTO @ YC Startup',         rating:4.7, sessions:72,  tags:['Startup','Fundraising','ML'], color:'#ec4899' },
-    { name:'Kai Zhang',        role:'Security Lead @ Microsoft', rating:4.8, sessions:110, tags:['SecOps','Pentesting','Azure'], color:'#fb923c' },
-  ];
+  const [mentors, setMentors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchMentors = async () => {
+      try {
+        setLoading(true);
+        const q = query(collection(db, 'users'), where('role', '==', 'mentor'));
+        const querySnapshot = await getDocs(q);
+        const mentorList = querySnapshot.docs.map(doc => {
+          const m = doc.data();
+          return {
+            id: doc.id,
+            name: m.name || 'Professional Mentor',
+            role: m.education || 'Expert Advisor',
+            rating: m.rating || (4.7 + Math.random() * 0.3),
+            sessions: m.sessions || Math.floor(Math.random() * 40) + 5,
+            tags: Array.isArray(m.skills) ? m.skills : ['Expertise'],
+            color: '#' + Math.floor(Math.random()*16777215).toString(16)
+          };
+        });
+        setMentors(mentorList);
+      } catch (err) {
+        console.error("Error fetching mentors:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMentors();
+  }, []);
+
+  const handleRequestMentorship = async (mentor: any) => {
+    if (!auth.currentUser) {
+      alert("Please login to request mentorship.");
+      return;
+    }
+    
+    try {
+      const requestId = `${auth.currentUser.uid}_${mentor.id}`;
+      await setDoc(doc(db, 'mentorshipRequests', requestId), {
+        learnerId: auth.currentUser.uid,
+        learnerName: user.name,
+        learnerEmail: auth.currentUser.email,
+        mentorId: mentor.id,
+        mentorName: mentor.name,
+        status: 'pending',
+        timestamp: new Date().toISOString()
+      }, { merge: true });
+      alert(`Mentorship request sent to ${mentor.name}!`);
+    } catch (err) {
+      console.error("Error sending request:", err);
+      alert("Failed to send request. Please try again.");
+    }
+  };
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="visible" style={{ display:'flex', flexDirection:'column', gap:'1.75rem' }}>
@@ -1027,38 +1796,436 @@ function MentorsTab({ user }: { user:UserProfile }) {
         <p style={{ color:'var(--text-muted)', marginTop:'0.5rem' }}>Matched for <strong style={{ color:'var(--text-primary)' }}>{user.name}</strong> based on your {CAREER_PATHS[user.goal].label} goals</p>
       </motion.div>
 
-      <motion.div variants={fadeUp} style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:'1.25rem' }}>
-        {mentors.map((m, i) => (
-          <motion.div key={i} variants={scaleIn} className="card-premium" style={{ padding:'1.75rem', textAlign:'center' }}>
-            <div style={{ position:'relative', width:72, height:72, margin:'0 auto 1.25rem' }}>
-              <div className="avatar-ring" style={{ background:`linear-gradient(135deg,${m.color},${m.color}88)` }}>
-                {m.name.split(' ').map(n=>n[0]).join('')}
+      {loading ? (
+        <div style={{ display:'flex', justifyContent:'center', padding:'4rem' }}>
+          <RefreshCw className="animate-spin" size={32} color="var(--accent-1)" />
+        </div>
+      ) : mentors.length > 0 ? (
+        <motion.div variants={fadeUp} style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:'1.25rem' }}>
+          {mentors.map((m, i) => (
+            <motion.div key={i} variants={scaleIn} className="card-premium" style={{ padding:'1.75rem', textAlign:'center' }}>
+              <div style={{ position:'relative', width:72, height:72, margin:'0 auto 1.25rem' }}>
+                <div className="avatar-ring" style={{ background:`linear-gradient(135deg,${m.color},${m.color}88)` }}>
+                  {m.name.split(' ').map((n: string) => n[0]).join('')}
+                </div>
+                <div style={{ position:'absolute', bottom:-4, right:-4, width:20, height:20, borderRadius:'50%', background:'#10b981', border:'2px solid var(--bg-card)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <div style={{ width:8, height:8, borderRadius:'50%', background:'#fff' }} />
+                </div>
               </div>
-              <div style={{ position:'absolute', bottom:-4, right:-4, width:20, height:20, borderRadius:'50%', background:'#10b981', border:'2px solid var(--bg-card)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <div style={{ width:8, height:8, borderRadius:'50%', background:'#fff' }} />
+              <h4 style={{ fontFamily:'var(--font-display)', fontWeight:800, marginBottom:'0.25rem' }}>{m.name}</h4>
+              <p style={{ fontSize:'0.8rem', color:m.color, fontWeight:700, marginBottom:'0.5rem' }}>{m.role}</p>
+              <div style={{ display:'flex', justifyContent:'center', gap:'1.25rem', marginBottom:'1rem' }}>
+                <span style={{ fontSize:'0.78rem', color:'var(--text-muted)', fontWeight:600 }}>⭐ {m.rating.toFixed(1)}</span>
+                <span style={{ fontSize:'0.78rem', color:'var(--text-muted)', fontWeight:600 }}>{m.sessions} sessions</span>
               </div>
-            </div>
-            <h4 style={{ fontFamily:'var(--font-display)', fontWeight:800, marginBottom:'0.25rem' }}>{m.name}</h4>
-            <p style={{ fontSize:'0.8rem', color:m.color, fontWeight:700, marginBottom:'0.5rem' }}>{m.role}</p>
-            <div style={{ display:'flex', justifyContent:'center', gap:'1.25rem', marginBottom:'1rem' }}>
-              <span style={{ fontSize:'0.78rem', color:'var(--text-muted)', fontWeight:600 }}>⭐ {m.rating}</span>
-              <span style={{ fontSize:'0.78rem', color:'var(--text-muted)', fontWeight:600 }}>{m.sessions} sessions</span>
-            </div>
-            <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'0.4rem', marginBottom:'1.25rem' }}>
-              {m.tags.map(t => <span key={t} style={{ padding:'0.25rem 0.6rem', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:6, fontSize:'0.7rem', fontWeight:600, color:'var(--text-muted)' }}>{t}</span>)}
-            </div>
-            <button className="btn btn-ghost" style={{ width:'100%', fontSize:'0.85rem' }}>Request Mentorship</button>
-          </motion.div>
-        ))}
-      </motion.div>
+              <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'0.4rem', marginBottom:'1.25rem' }}>
+                {(Array.isArray(m.tags) ? m.tags : ['Expertise']).slice(0, 3).map((t: string) => <span key={t} style={{ padding:'0.25rem 0.6rem', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:6, fontSize:'0.7rem', fontWeight:600, color:'var(--text-muted)' }}>{t}</span>)}
+              </div>
+              <button 
+                className="btn btn-ghost" 
+                style={{ width:'100%', fontSize:'0.85rem' }}
+                onClick={() => handleRequestMentorship(m)}
+              >
+                Request Mentorship
+              </button>
+            </motion.div>
+          ))}
+        </motion.div>
+      ) : (
+        <motion.div variants={fadeUp} className="glass" style={{ padding:'4rem 2rem', textAlign:'center', borderRadius:24 }}>
+          <div style={{ width:64, height:64, borderRadius:'50%', background:'rgba(56,189,248,0.1)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 1.5rem', color:'var(--accent-1)' }}>
+            <Users size={32} />
+          </div>
+          <h3 style={{ fontFamily:'var(--font-display)', fontSize:'1.25rem', fontWeight:800, marginBottom:'0.5rem' }}>No Active Mentors Yet</h3>
+          <p style={{ color:'var(--text-muted)', maxWidth:400, margin:'0 auto' }}>We're currently onboarding mentors in the {CAREER_PATHS[user.goal].label} domain. Check back soon!</p>
+        </motion.div>
+      )}
     </motion.div>
   );
 }
 
 // ─── Utility ────────────────────────────────────────────────
 function hexToRgb(hex: string): string {
-  const r = parseInt(hex.slice(1,3),16);
-  const g = parseInt(hex.slice(3,5),16);
-  const b = parseInt(hex.slice(5,7),16);
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
   return `${r},${g},${b}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MENTOR DASHBOARD
+// ═══════════════════════════════════════════════════════════════
+function MentorDashboard() {
+  const [requests, setRequests] = useState<any[]>([]);
+  const [userCount, setUserCount] = useState(0);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      const q = query(collection(db, 'users'), where('role', '==', 'user'));
+      const snapshot = await getDocs(q);
+      setUserCount(snapshot.size);
+    };
+    
+    const fetchRequests = async () => {
+      if (!auth.currentUser) return;
+      try {
+        const q = query(
+          collection(db, 'mentorshipRequests'), 
+          where('mentorId', '==', auth.currentUser.uid),
+          where('status', '==', 'pending')
+        );
+        const snapshot = await getDocs(q);
+        setRequests(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (err) {
+        console.error("Error fetching requests:", err);
+      }
+    };
+
+    fetchStats();
+    fetchRequests();
+  }, []);
+
+  const handleRequestAction = async (requestId: string, action: 'accepted' | 'rejected') => {
+    try {
+      await setDoc(doc(db, 'mentorshipRequests', requestId), { 
+        status: action,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      setRequests(prev => prev.filter(r => r.id !== requestId));
+    } catch (err) {
+      console.error("Error updating request:", err);
+      alert("Failed to update request.");
+    }
+  };
+
+  const stats = [
+    { label: 'Total Learners', value: userCount.toLocaleString() || '0', trend: '+12%', icon: <Users size={20} />, color: '#38bdf8' },
+    { label: 'Active Progress', value: Math.floor(userCount * 0.6).toString(), trend: '+5%', icon: <Zap size={20} />, color: '#f59e0b' },
+    { label: 'Skill Gaps Bridged', value: (userCount * 3).toString(), trend: '+28%', icon: <Target size={20} />, color: '#10b981' },
+    { label: 'Avg. Readiness', value: '76%', trend: '+3%', icon: <TrendingUp size={20} />, color: '#a78bfa' },
+  ];
+
+  return (
+    <motion.div variants={stagger} initial="hidden" animate="visible" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
+        {stats.map((s, i) => (
+          <motion.div key={i} variants={scaleIn} className="card-premium" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+            <div style={{ width: 48, height: 48, borderRadius: 14, background: `${s.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.color }}>{s.icon}</div>
+            <div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{s.label}</p>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                <h3 style={{ fontSize: '1.5rem', fontWeight: 800, fontFamily: 'var(--font-display)' }}>{s.value}</h3>
+                <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 700 }}>{s.trend}</span>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem' }}>
+        <div className="card-premium" style={{ padding: '2rem' }}>
+          <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem', marginBottom: '1.5rem', display:'flex', alignItems:'center', gap:'0.75rem' }}>
+            <Briefcase size={20} color="var(--accent-1)" />
+            Mentorship Requests
+            {requests.length > 0 && <span className="badge badge-purple">{requests.length} New</span>}
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: 350, overflowY: 'auto', paddingRight: '0.5rem' }}>
+            {requests.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-muted)' }}>
+                <CheckCircle2 size={40} style={{ opacity: 0.2, marginBottom: '1rem' }} />
+                <p>All caught up! No pending requests.</p>
+              </div>
+            ) : (
+              requests.map((req) => (
+                <motion.div 
+                  key={req.id} 
+                  initial={{ opacity: 0, x: 20 }} 
+                  animate={{ opacity: 1, x: 0 }}
+                  style={{ 
+                    padding: '1.25rem', background: 'rgba(255,255,255,0.03)', borderRadius: 16, 
+                    border: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' 
+                  }}
+                >
+                  <div>
+                    <h4 style={{ fontWeight: 700, marginBottom: '0.25rem' }}>{req.learnerName}</h4>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{req.learnerEmail}</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button 
+                      className="btn btn-ghost" 
+                      style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', background: 'rgba(16,185,129,0.1)', color: '#10b981' }}
+                      onClick={() => handleRequestAction(req.id, 'accepted')}
+                    >
+                      Accept
+                    </button>
+                    <button 
+                      className="btn btn-ghost" 
+                      style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}
+                      onClick={() => handleRequestAction(req.id, 'rejected')}
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </motion.div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.8fr', gap: '1.5rem' }}>
+        <div className="card-premium" style={{ padding: '2rem' }}>
+          <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem', marginBottom: '1.5rem' }}>Readiness Distribution</h3>
+          <div style={{ height: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={[
+                { range: '0-20%', count: 120 },
+                { range: '21-40%', count: 340 },
+                { range: '41-60%', count: 480 },
+                { range: '61-80%', count: 290 },
+                { range: '81-100%', count: 54 },
+              ]}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                <XAxis dataKey="range" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 12 }} />
+                <Bar dataKey="count" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="card-premium" style={{ padding: '2rem' }}>
+          <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem', marginBottom: '1.5rem' }}>Critical Learning Gaps</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {[
+                { label: 'System Design', value: 72, color: '#ef4444' },
+                { label: 'Cloud Architecture', value: 58, color: '#f59e0b' },
+              ].map((gap, i) => (
+                <div key={i}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.85rem' }}>
+                    <span style={{ fontWeight: 600 }}>{gap.label}</span>
+                    <span style={{ color: gap.color, fontWeight: 700 }}>{gap.value}%</span>
+                  </div>
+                  <div style={{ height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 999 }}>
+                    <div style={{ height: '100%', width: `${gap.value}%`, background: gap.color, borderRadius: 999 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {[
+                { label: 'Data Structures', value: 45, color: '#38bdf8' },
+                { label: 'DevOps CI/CD', value: 39, color: '#10b981' },
+              ].map((gap, i) => (
+                <div key={i}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.85rem' }}>
+                    <span style={{ fontWeight: 600 }}>{gap.label}</span>
+                    <span style={{ color: gap.color, fontWeight: 700 }}>{gap.value}%</span>
+                  </div>
+                  <div style={{ height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 999 }}>
+                    <div style={{ height: '100%', width: `${gap.value}%`, background: gap.color, borderRadius: 999 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <button className="btn btn-primary" style={{ width: '100%', marginTop: '2rem' }}>Send Learning Blast</button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+function ProfileTab({ user, role, setUser }: { user: UserProfile; role: 'user' | 'mentor'; setUser: React.Dispatch<React.SetStateAction<UserProfile>> }) {
+  const [name, setName] = useState(user.name);
+  const [edu, setEdu] = useState(user.education);
+  const [bio, setBio] = useState(user.bio || '');
+  const [skills, setSkills] = useState(Object.keys(user.skills || {}));
+  const [newSkill, setNewSkill] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleAddSkill = () => {
+    if (newSkill && !skills.includes(newSkill)) {
+      setSkills([...skills, newSkill]);
+      setNewSkill('');
+    }
+  };
+
+  const removeSkill = (s: string) => setSkills(skills.filter(i => i !== s));
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      if (auth.currentUser) {
+        // Convert skills back to SkillSet map (preserving values if they exist)
+        const skillMap: any = {};
+        skills.forEach(s => skillMap[s] = user.skills?.[s] || 25);
+        
+        const updatedData = {
+          name,
+          education: edu,
+          bio,
+          skills: skillMap,
+          updatedAt: new Date().toISOString()
+        };
+
+        await setDoc(doc(db, 'users', auth.currentUser.uid), updatedData, { merge: true });
+        
+        setUser(prev => ({ 
+          ...prev, 
+          name, 
+          education: edu, 
+          bio, 
+          skills: skillMap 
+        }));
+        
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      }
+    } catch (err) {
+      console.error("Save failed:", err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <motion.div variants={stagger} initial="hidden" animate="visible" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      <motion.div variants={fadeUp} className="card-premium" style={{ padding: '3rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2.5rem' }}>
+          <div>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 900, marginBottom: '0.5rem' }}>Profile Settings</h2>
+            <p style={{ color: 'var(--text-muted)' }}>Manage your cloud-synced professional identity.</p>
+          </div>
+          <div style={{ width: 80, height: 80, borderRadius: 24, background: 'linear-gradient(135deg,#38bdf8,#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '2rem', fontWeight: 900 }}>
+            {name[0]?.toUpperCase() || 'U'}
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+          <div className="input-wrap">
+            <label className="input-label">Full Name</label>
+            <input className="input-field" value={name} onChange={e => setName(e.target.value)} />
+          </div>
+          <div className="input-wrap">
+            <label className="input-label">Education / Expertise</label>
+            <input className="input-field" value={edu} onChange={e => setEdu(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="input-wrap" style={{ marginBottom: '1.5rem' }}>
+          <label className="input-label">Professional Bio / Career Interest</label>
+          <textarea className="input-field" style={{ minHeight: '100px', resize: 'vertical' }} value={bio} onChange={e => setBio(e.target.value)} />
+        </div>
+
+        <div className="input-wrap" style={{ marginBottom: '2rem' }}>
+          <label className="input-label">Core Skills</label>
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+            <input className="input-field" value={newSkill} onChange={e => setNewSkill(e.target.value)} placeholder="Add a skill..." onKeyDown={e => e.key === 'Enter' && handleAddSkill()} />
+            <button className="btn btn-ghost" onClick={handleAddSkill} style={{ height: 'auto' }}>Add</button>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+            {skills.map(s => (
+              <span key={s} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.9rem', borderRadius: 10, background: 'rgba(56,189,248,0.1)', border: '1px solid rgba(56,189,248,0.2)', fontSize: '0.85rem', color: 'var(--accent-1)' }}>
+                {s} <X size={14} style={{ cursor: 'pointer', opacity: 0.6 }} onClick={() => removeSkill(s)} />
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+          <button 
+            className="btn btn-primary" 
+            disabled={isSaving}
+            onClick={handleSave} 
+            style={{ 
+              padding: '1rem 3rem', 
+              fontSize: '1rem',
+              background: saved ? '#10b981' : 'linear-gradient(135deg,#7c3aed,#ec4899)',
+              transition: 'all 0.3s'
+            }}
+          >
+            {isSaving ? 'Syncing...' : (saved ? <>Saved <CheckCircle2 size={18} style={{ marginLeft: 8 }} /></> : 'Update Cloud Profile')}
+          </button>
+        </div>
+      </motion.div>
+
+      <motion.div variants={fadeUp} className="card-premium" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.02)' }}>
+        <ShieldCheck size={20} />
+        <p style={{ fontSize: '0.85rem' }}>Your data is securely stored in Firebase Cloud with real-time syncing enabled across all sessions.</p>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+
+function MentorUserManagement() {
+  const [users, setUsers] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const q = query(collection(db, 'users'));
+      const querySnapshot = await getDocs(q);
+      const userList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setUsers(userList.filter((u: any) => u.role === 'user'));
+    };
+    fetchUsers();
+  }, []);
+
+  return (
+    <motion.div variants={stagger} initial="hidden" animate="visible">
+      <div style={{ marginBottom: '2rem' }}>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 900 }}>Learner Performance Tracking</h2>
+        <p style={{ color: 'var(--text-muted)' }}>Analyze and guide active learners on the SkillBridge platform.</p>
+      </div>
+
+      <div className="card-premium" style={{ overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border-subtle)' }}>
+              <th style={{ textAlign: 'left', padding: '1.25rem', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Learner</th>
+              <th style={{ textAlign: 'left', padding: '1.25rem', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Path</th>
+              <th style={{ textAlign: 'left', padding: '1.25rem', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Readiness</th>
+              <th style={{ textAlign: 'right', padding: '1.25rem', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.length === 0 ? (
+              <tr><td colSpan={4} style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>No active learners found.</td></tr>
+            ) : users.map((u) => (
+              <tr key={u.id} style={{ borderBottom: '1px solid var(--border-subtle)', transition: 'background 0.3s' }}>
+                <td style={{ padding: '1.25rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg,#38bdf8,#7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.8rem', fontWeight: 800 }}>
+                      {u.email[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700 }}>{u.email.split('@')[0]}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Joined {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}</div>
+                    </div>
+                  </div>
+                </td>
+                <td style={{ padding: '1.25rem' }}>
+                  <span className="badge badge-blue">Generalist</span>
+                </td>
+                <td style={{ padding: '1.25rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ flex: 1, height: 6, width: 100, background: 'rgba(255,255,255,0.05)', borderRadius: 999 }}>
+                      <div style={{ height: '100%', width: '45%', background: '#10b981', borderRadius: 999 }} />
+                    </div>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>45%</span>
+                  </div>
+                </td>
+                <td style={{ padding: '1.25rem', textAlign: 'right' }}>
+                  <button className="btn btn-ghost" style={{ fontSize: '0.75rem' }}>View Analytics</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </motion.div>
+  );
 }

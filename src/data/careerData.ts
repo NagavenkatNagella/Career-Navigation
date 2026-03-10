@@ -17,9 +17,13 @@ export const CAREER_PATHS: Record<CareerPathType, { label: string, description: 
         label: 'Artificial Intelligence',
         description: 'Create intelligent systems that learn and adapt.'
     },
-    'cloud-computing': {
+    'cloud-eng': {
         label: 'Cloud Computing',
         description: 'Manage and scale infrastructure in the cloud.'
+    },
+    'ui-ux': {
+        label: 'UI/UX Design',
+        description: 'Design intuitive and beautiful user interfaces and experiences.'
     }
 };
 
@@ -44,10 +48,15 @@ export const QUESTIONS_BY_PATH: Record<CareerPathType, AssessmentQuestion[]> = {
         { id: 2, question: "What is Overfitting?", options: ["Model matches training data too closely", "Model is too simple", "Dataset is too small", "Training is too fast"], correctAnswer: 0, skillMapped: "Model Performance" },
         { id: 3, question: "What is a 'Tensor'?", options: ["Multi-dimensional array", "Encryption key", "Hardware component", "Code editor"], correctAnswer: 0, skillMapped: "Deep Learning" }
     ],
-    'cloud-computing': [
+    'cloud-eng': [
         { id: 1, question: "What is 'SaaS'?", options: ["Servers as a Service", "Software as a Service", "System as a Service", "Security as a Service"], correctAnswer: 1, skillMapped: "Cloud Models" },
         { id: 2, question: "Which service is used for auto-scaling on AWS?", options: ["S3", "EC2 Auto Scaling", "Lambda", "IAM"], correctAnswer: 1, skillMapped: "Infrastructure" },
         { id: 3, question: "What is the primary benefit of Serverless computing?", options: ["Fixed costs", "No hardware management", "Slower performance", "Manual scaling"], correctAnswer: 1, skillMapped: "Modern Architectures" }
+    ],
+    'ui-ux': [
+        { id: 1, question: "What does UX stand for?", options: ["User Experience", "User Extreme", "Unit Exchange", "User Exercise"], correctAnswer: 0, skillMapped: "Basics" },
+        { id: 2, question: "What is a 'Wireframe'?", options: ["A finished design", "A low-fidelity blueprint", "A physical frame", "A coding framework"], correctAnswer: 1, skillMapped: "Design" },
+        { id: 3, question: "Which color model is primarily used for digital screens?", options: ["CMYK", "RGB", "PMS", "RYB"], correctAnswer: 1, skillMapped: "Color Theory" }
     ]
 };
 
@@ -72,10 +81,15 @@ export const ROADMAPS: Record<CareerPathType, RoadmapStep[]> = {
         { title: "Core ML", description: "Regression and SVMs", status: "current", technologies: ["Supervised ML", "Feature Eng."] },
         { title: "Neural Networks", description: "Deep Learning and Transformers", status: "locked", technologies: ["PyTorch", "LLMs"] }
     ],
-    'cloud-computing': [
+    'cloud-eng': [
         { title: "IT Foundations", description: "Virtualization and OS basics", status: "completed", technologies: ["Ubuntu", "Docker"] },
         { title: "Cloud Platforms", description: "AWS/Azure/GCP Essentials", status: "current", technologies: ["IAM", "VPC", "EC2"] },
         { title: "DevOps/SRE", description: "CI/CD and Infrastructure as Code", status: "locked", technologies: ["Terraform", "Kubernetes"] }
+    ],
+    'ui-ux': [
+        { title: "Design Principles", description: "Typography, Color, and Layout", status: "completed", technologies: ["Visual Hierarchy", "Color Wheel"] },
+        { title: "Tools & Prototyping", description: "Mastering Figma and Auto Layout", status: "current", technologies: ["Figma", "Prototypes"] },
+        { title: "User Research", description: "Personas and User Testing", status: "locked", technologies: ["Interviews", "Usability Testing"] }
     ]
 };
 

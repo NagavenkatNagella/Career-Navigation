@@ -1,4 +1,4 @@
-export type CareerPathType = 'software-dev' | 'data-science' | 'cybersecurity' | 'ai-ml' | 'cloud-computing';
+export type CareerPathType = 'software-dev' | 'data-science' | 'cybersecurity' | 'ai-ml' | 'cloud-eng' | 'ui-ux';
 
 export interface SkillSet {
     [key: string]: number;
@@ -10,6 +10,9 @@ export interface UserProfile {
     goal: CareerPathType;
     experienceLevel: 'beginner' | 'intermediate' | 'advanced';
     skills: SkillSet;
+    bio?: string;
+    role?: 'user' | 'mentor';
+    onboarded?: boolean;
 }
 
 export interface AssessmentQuestion {
