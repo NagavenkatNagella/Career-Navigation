@@ -1,0 +1,10 @@
+﻿
+> education@0.0.0 build
+> tsc -b && vite build
+
+src/App.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/App.tsx(102,14): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ React: number; TypeScript: number; "Node.js": number; "System Design": number; "Cloud/AWS": number; Database: number; }'.
+  No index signature with a parameter of type 'string' was found on type '{ React: number; TypeScript: number; "Node.js": number; "System Design": number; "Cloud/AWS": number; Database: number; }'.
+src/App.tsx(109,14): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ React: number; TypeScript: number; "Node.js": number; "System Design": number; "Cloud/AWS": number; Database: number; }'.
+  No index signature with a parameter of type 'string' was found on type '{ React: number; TypeScript: number; "Node.js": number; "System Design": number; "Cloud/AWS": number; Database: number; }'.
+src/App.tsx(330,149): error TS2739: Type '(string | Element)[]' is missing the following properties from type 'ReactElement<any, any>': type, props, key
