@@ -1,7 +1,7 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
-  BrainCircuit, Compass, Target, Map, BookOpen, Users,
+  BrainCircuit, Target, Map, BookOpen, Users,
   ChevronRight, Zap, CheckCircle2, AlertCircle, TrendingUp,
   Award, Globe, Rocket, ShieldCheck, Cloud, Briefcase,
   GraduationCap, Star, BarChart3, Lock, Menu, X
@@ -115,7 +115,6 @@ export default function App() {
             key="as"
             user={user}
             qIdx={qIdx}
-            score={score}
             onAnswer={handleAnswer}
           />
         )}
@@ -284,29 +283,6 @@ function SplashScreen() {
             }}
           />
         </div>
-
-        {/* Text Reveal */}
-        <div style={{ overflow: 'hidden' }}>
-          <motion.h1
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            transition={{ duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.5 }}
-            style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(2.5rem,7vw,4.5rem)', fontWeight: 900, letterSpacing: '-0.05em', lineHeight: 1 }}
-          >
-            <span style={{ color: 'var(--text-primary)' }}>Skill</span>
-            <span style={{ background: 'linear-gradient(135deg,#38bdf8,#7c3aed)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Bridge</span>
-            <span style={{ color: 'var(--text-primary)' }}> AI</span>
-          </motion.h1>
-        </div>
-
-        <motion.div
-          initial={{ opacity: 0, letterSpacing: '0.1em' }}
-          animate={{ opacity: 1, letterSpacing: '0.25em' }}
-          transition={{ delay: 1.2, duration: 1.5 }}
-          style={{ color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.8rem', fontWeight: 700, marginTop: '1.5rem' }}
-        >
-          Bridge the Industry Gap
-        </motion.div>
 
         {/* Cinematic Particles / Lens Flare */}
         <motion.div 
@@ -503,7 +479,7 @@ function OnboardingScreen({ onDone }: { onDone:(n:string,e:string,g:CareerPathTy
 // ═══════════════════════════════════════════════════════════════
 // ASSESSMENT
 // ═══════════════════════════════════════════════════════════════
-function AssessmentScreen({ user, qIdx, score, onAnswer }: { user:UserProfile; qIdx:number; score:number; onAnswer:(i:number)=>void }) {
+function AssessmentScreen({ user, qIdx, onAnswer }: { user:UserProfile; qIdx:number; onAnswer:(i:number)=>void }) {
   const qs  = QUESTIONS_BY_PATH[user.goal];
   const q   = qs[qIdx];
   const pct = ((qIdx + 1) / qs.length) * 100;
