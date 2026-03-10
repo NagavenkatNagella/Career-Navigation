@@ -57,11 +57,61 @@ const CAREER_COLORS: Record<string, string> = {
   'ui-ux':          '#ec4899'
 };
 
+function hexToRgb(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `${r},${g},${b}`;
+}
+
 const SAMPLE_GROWTH = [
   { month:'Jan', demand:62 }, { month:'Feb', demand:68 }, { month:'Mar', demand:71 },
   { month:'Apr', demand:75 }, { month:'May', demand:82 }, { month:'Jun', demand:89 },
   { month:'Jul', demand:93 },
 ];
+
+function NotificationBadge() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    const q = query(
+      collection(db, 'mentorshipRequests'), 
+      where('mentorId', '==', auth.currentUser.uid),
+      where('status', '==', 'pending')
+    );
+    
+    const getCount = async () => {
+      try {
+        const snapshot = await getDocs(q);
+        setCount(snapshot.size);
+      } catch (err) {
+        console.error("Error fetching notification count:", err);
+      }
+    };
+    getCount();
+  }, []);
+
+  if (count === 0) return null;
+
+  return (
+    <motion.div 
+      initial={{ scale: 0 }} 
+      animate={{ scale: 1 }}
+      style={{ 
+        position: 'absolute', top: -5, right: -5, 
+        minWidth: 20, height: 20, borderRadius: 10, 
+        background: '#ef4444', color: '#fff', 
+        fontSize: '0.65rem', fontWeight: 800, 
+        display: 'flex', alignItems: 'center', justifyContent: 'center', 
+        padding: '0 4px', border: '2px solid var(--bg-base)',
+        pointerEvents: 'none'
+      }}
+    >
+      {count}
+    </motion.div>
+  );
+}
 
 // ─── App Root ────────────────────────────────────────────────
 export default function App() {
@@ -304,7 +354,7 @@ export default function App() {
                     <img src="/logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
                   <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.15rem', letterSpacing: '-0.03em' }}>
-                    Skill<span style={{ color: 'var(--accent-1)' }}>Bridge</span> <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>{role === 'mentor' ? 'MENTOR' : 'AI'}</span>
+                    Skill<span style={{ color: 'var(--accent-1)' }}>Bridge</span> <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>{role === 'mentor' ? 'MENTOR' : 'LEARNER'}</span>
                   </span>
                 </div>
 
@@ -333,23 +383,28 @@ export default function App() {
                   <div className="hide-mobile" style={{ textAlign: 'right' }}>
                     <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>{user.name || (role === 'mentor' ? 'Admin Mentor' : 'Learner')}</div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--accent-1)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      {role === 'mentor' ? 'Expert Guide' : CAREER_PATHS[user.goal].label}
+                      {role === 'mentor' ? 'Expert Advisor' : CAREER_PATHS[user.goal].label}
                     </div>
                   </div>
-                  <button 
-                    onClick={() => setActiveTab('profile')}
-                    className="animate-glowPulse" 
-                    style={{ 
-                      width: 40, height: 40, borderRadius: 12, 
-                      background: activeTab === 'profile' ? '#fff' : 'linear-gradient(135deg,#38bdf8,#7c3aed)', 
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                      fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.9rem', 
-                      color: activeTab === 'profile' ? 'var(--accent-1)' : '#fff',
-                      border: 'none', cursor: 'pointer', transition: 'all 0.3s'
-                    }}
-                  >
-                    {(user.name ? user.name[0] : (role === 'mentor' ? 'M' : 'L')).toUpperCase()}
-                  </button>
+                  <div style={{ position: 'relative' }}>
+                    <button 
+                      onClick={() => setActiveTab('profile')}
+                      className="animate-glowPulse" 
+                      style={{ 
+                        width: 40, height: 40, borderRadius: 12, 
+                        background: activeTab === 'profile' ? '#fff' : 'linear-gradient(135deg,#38bdf8,#7c3aed)', 
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                        fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.9rem', 
+                        color: activeTab === 'profile' ? 'var(--accent-1)' : '#fff',
+                        border: 'none', cursor: 'pointer', transition: 'all 0.3s'
+                      }}
+                    >
+                      {(user.name ? user.name[0] : (role === 'mentor' ? 'M' : 'L')).toUpperCase()}
+                    </button>
+                    {role === 'mentor' && (
+                       <NotificationBadge />
+                    )}
+                  </div>
                   <button className="btn btn-ghost btn-icon show-mobile" onClick={() => setMobileMenu(!mobileMenu)} aria-label="Toggle Menu">
                     {mobileMenu ? <X size={20} /> : <Menu size={20} />}
                   </button>
@@ -382,7 +437,7 @@ export default function App() {
                 {activeTab === 'path' && <RoadmapTab key="rt" user={user} />}
                 {activeTab === 'recommendations' && <ResourcesTab key="res" user={user} />}
                 {activeTab === 'mentors' && <MentorsTab key="mt" user={user} />}
-                {activeTab === 'profile' && <ProfileTab key="prof" user={user} role={role} setUser={setUser} />}
+                {activeTab === 'profile' && <ProfileTab key="prof" user={user} setUser={setUser} />}
                 {activeTab === 'mentor-stats' && <MentorDashboard key="mstats" />}
                 {activeTab === 'mentor-users' && <MentorUserManagement key="musers" />}
               </AnimatePresence>
@@ -1727,6 +1782,8 @@ function ResourcesTab({ user }: { user:UserProfile }) {
   );
 }
 
+
+
 // ═══════════════════════════════════════════════════════════════
 // MENTORS TAB
 // ═══════════════════════════════════════════════════════════════
@@ -1773,7 +1830,7 @@ function MentorsTab({ user }: { user:UserProfile }) {
       await setDoc(doc(db, 'mentorshipRequests', requestId), {
         learnerId: auth.currentUser.uid,
         learnerName: user.name,
-        learnerEmail: auth.currentUser.email,
+        learnerEmail: auth.currentUser.email || '',
         mentorId: mentor.id,
         mentorName: mentor.name,
         status: 'pending',
@@ -1844,13 +1901,7 @@ function MentorsTab({ user }: { user:UserProfile }) {
   );
 }
 
-// ─── Utility ────────────────────────────────────────────────
-function hexToRgb(hex: string): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `${r},${g},${b}`;
-}
+// (Consolidated)
 
 // ═══════════════════════════════════════════════════════════════
 // MENTOR DASHBOARD
@@ -1861,9 +1912,13 @@ function MentorDashboard() {
 
   useEffect(() => {
     const fetchStats = async () => {
-      const q = query(collection(db, 'users'), where('role', '==', 'user'));
-      const snapshot = await getDocs(q);
-      setUserCount(snapshot.size);
+      try {
+        const q = query(collection(db, 'users'), where('role', '==', 'user'));
+        const snapshot = await getDocs(q);
+        setUserCount(snapshot.size);
+      } catch (err) {
+        console.error("Stats fetch failed:", err);
+      }
     };
     
     const fetchRequests = async () => {
@@ -1922,16 +1977,16 @@ function MentorDashboard() {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: '1.5rem' }}>
         <div className="card-premium" style={{ padding: '2rem' }}>
           <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem', marginBottom: '1.5rem', display:'flex', alignItems:'center', gap:'0.75rem' }}>
             <Briefcase size={20} color="var(--accent-1)" />
             Mentorship Requests
             {requests.length > 0 && <span className="badge badge-purple">{requests.length} New</span>}
           </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: 350, overflowY: 'auto', paddingRight: '0.5rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem', maxHeight: 500, overflowY: 'auto', paddingRight: '0.5rem' }}>
             {requests.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-muted)' }}>
+              <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem 0', color: 'var(--text-muted)' }}>
                 <CheckCircle2 size={40} style={{ opacity: 0.2, marginBottom: '1rem' }} />
                 <p>All caught up! No pending requests.</p>
               </div>
@@ -1939,28 +1994,31 @@ function MentorDashboard() {
               requests.map((req) => (
                 <motion.div 
                   key={req.id} 
-                  initial={{ opacity: 0, x: 20 }} 
-                  animate={{ opacity: 1, x: 0 }}
+                  initial={{ opacity: 0, y: 10 }} 
+                  animate={{ opacity: 1, y: 0 }}
                   style={{ 
                     padding: '1.25rem', background: 'rgba(255,255,255,0.03)', borderRadius: 16, 
-                    border: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' 
+                    border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '1rem'
                   }}
                 >
-                  <div>
-                    <h4 style={{ fontWeight: 700, marginBottom: '0.25rem' }}>{req.learnerName}</h4>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{req.learnerEmail}</p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <h4 style={{ fontWeight: 700, marginBottom: '0.25rem' }}>{req.learnerName}</h4>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{req.learnerEmail}</p>
+                    </div>
+                    <div className="badge badge-blue" style={{ fontSize: '0.65rem' }}>Pending</div>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
                     <button 
                       className="btn btn-ghost" 
-                      style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', background: 'rgba(16,185,129,0.1)', color: '#10b981' }}
+                      style={{ flex: 1, padding: '0.5rem', fontSize: '0.8rem', background: 'rgba(16,185,129,0.1)', color: '#10b981' }}
                       onClick={() => handleRequestAction(req.id, 'accepted')}
                     >
                       Accept
                     </button>
                     <button 
                       className="btn btn-ghost" 
-                      style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}
+                      style={{ flex: 1, padding: '0.5rem', fontSize: '0.8rem', background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}
                       onClick={() => handleRequestAction(req.id, 'rejected')}
                     >
                       Reject
@@ -2037,7 +2095,7 @@ function MentorDashboard() {
     </motion.div>
   );
 }
-function ProfileTab({ user, role, setUser }: { user: UserProfile; role: 'user' | 'mentor'; setUser: React.Dispatch<React.SetStateAction<UserProfile>> }) {
+function ProfileTab({ user, setUser }: { user: UserProfile; setUser: React.Dispatch<React.SetStateAction<UserProfile>> }) {
   const [name, setName] = useState(user.name);
   const [edu, setEdu] = useState(user.education);
   const [bio, setBio] = useState(user.bio || '');
