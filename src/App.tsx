@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Briefcase,
   Map,
@@ -10,7 +11,11 @@ import {
   ChevronRight,
   Zap,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Users,
+  Star,
+  Globe,
+  Rocket
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -23,7 +28,8 @@ import {
   Bar,
   XAxis,
   YAxis,
-  CartesianGrid
+  CartesianGrid,
+  Cell
 } from 'recharts';
 import './index.css';
 
@@ -35,59 +41,81 @@ const userProfile = {
   currentSkills: {
     "React": 85,
     "TypeScript": 70,
-    "Node.js": 40,
-    "System Design": 20,
-    "Cloud/AWS": 15,
-    "Database": 50
+    "Node.js": 45,
+    "System Design": 25,
+    "Cloud/AWS": 20,
+    "Database": 55
   } as Record<string, number>
 };
 
 const requiredSkills: Record<string, number> = {
-  "React": 90,
-  "TypeScript": 85,
-  "Node.js": 80,
-  "System Design": 75,
-  "Cloud/AWS": 70,
-  "Database": 70
+  "React": 95,
+  "TypeScript": 90,
+  "Node.js": 85,
+  "System Design": 80,
+  "Cloud/AWS": 75,
+  "Database": 80
 };
 
 const industryTrends = [
-  { name: 'AI/ML Integration', demand: 95 },
-  { name: 'Cloud Native', demand: 88 },
-  { name: 'Web3 / Blockchain', demand: 45 },
-  { name: 'Serverless', demand: 75 },
-  { name: 'Edge Computing', demand: 60 }
+  { name: 'AI/ML Integration', demand: 98, color: 'var(--accent-primary)' },
+  { name: 'Cloud Native', demand: 92, color: 'var(--accent-secondary)' },
+  { name: 'Distributed Systems', demand: 85, color: 'var(--accent-tertiary)' },
+  { name: 'Serverless', demand: 78, color: 'var(--accent-quaternary)' },
+  { name: 'DevSecOps', demand: 72, color: 'var(--status-warning)' }
 ];
 
 const learningPaths = [
   {
     id: 1,
     title: "Advanced System Design for Scale",
-    provider: "TechPlatform",
+    provider: "SkillBridge Premium",
     duration: "4 weeks",
-    matchScore: 95,
+    matchScore: 98,
     skills: ["System Design", "Cloud/AWS"],
-    type: "Course"
+    type: "Expert Course",
+    difficulty: "Advanced"
   },
   {
     id: 2,
     title: "Node.js Microservices Masterclass",
-    provider: "CodeAcademy",
+    provider: "Industry Leaders",
     duration: "6 weeks",
-    matchScore: 88,
+    matchScore: 92,
     skills: ["Node.js", "Database"],
-    type: "Bootcamp"
+    type: "Specialization",
+    difficulty: "Intermediate"
   },
   {
     id: 3,
-    title: "AWS Certified Developer",
-    provider: "Amazon",
-    duration: "8 weeks",
-    matchScore: 82,
+    title: "AWS Certified Solutions Architect",
+    provider: "Amazon Web Services",
+    duration: "12 weeks",
+    matchScore: 89,
     skills: ["Cloud/AWS"],
-    type: "Certification"
+    type: "Certification",
+    difficulty: "Advanced"
   }
 ];
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: { type: 'spring', stiffness: 100 }
+  }
+};
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -98,7 +126,7 @@ function App() {
     setMounted(true);
     const timer = setTimeout(() => {
       setShowSplash(false);
-    }, 4000);
+    }, 4500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -117,283 +145,446 @@ function App() {
 
   if (showSplash) {
     return (
-      <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-dark)', zIndex: 9999 }}>
-        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem' }}>
+      <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-dark)', overflow: 'hidden', position: 'fixed', inset: 0, zIndex: 10000 }}>
+        <div className="bg-mesh"></div>
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2.5rem' }}
+        >
           <div style={{ position: 'relative' }}>
-            <div className="glow-effect" style={{ width: '120px', height: '120px', background: 'var(--accent-primary)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Compass size={64} color="white" />
-            </div>
-            <div style={{ position: 'absolute', right: -10, top: -10, background: 'var(--status-success)', width: 24, height: 24, borderRadius: '50%', border: '4px solid var(--bg-dark)' }}></div>
+            <motion.div
+              animate={{
+                rotate: 360,
+                boxShadow: ['0 0 20px var(--accent-glow)', '0 0 50px var(--accent-glow)', '0 0 20px var(--accent-glow)']
+              }}
+              transition={{ rotate: { duration: 20, repeat: Infinity, ease: 'linear' }, boxShadow: { duration: 3, repeat: Infinity } }}
+              style={{ width: '140px', height: '140px', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))', borderRadius: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Compass size={80} color="white" />
+            </motion.div>
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 1, type: 'spring' }}
+              style={{ position: 'absolute', right: -15, top: -15, background: 'var(--status-success)', padding: '8px', borderRadius: '50%', border: '4px solid var(--bg-dark)', color: 'white' }}
+            >
+              <CheckCircle2 size={24} />
+            </motion.div>
           </div>
+
           <div className="text-center">
-            <h1 style={{ fontSize: '3rem', letterSpacing: '2px', background: 'linear-gradient(90deg, #fff, var(--text-muted))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>SkillBridge AI</h1>
-            <p className="text-muted mt-2" style={{ letterSpacing: '4px', textTransform: 'uppercase', fontSize: '0.9rem' }}>Align Your Aspiration.</p>
+            <motion.h1
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              style={{ fontSize: '4rem', fontWeight: 800, letterSpacing: '-2px', background: 'linear-gradient(to bottom, #fff, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+            >
+              SkillBridge AI
+            </motion.h1>
+            <motion.p
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.8 }}
+              className="text-muted mt-2"
+              style={{ letterSpacing: '6px', textTransform: 'uppercase', fontSize: '1rem', fontWeight: 500 }}
+            >
+              Your Career, Reimagined.
+            </motion.p>
           </div>
 
-          <div className="mt-8" style={{ width: '200px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
-            <div className="progress-fill animate-splash-progress" style={{ width: '100%', background: 'linear-gradient(90deg, var(--accent-primary), var(--accent-secondary))' }}></div>
+          <div style={{ width: '300px', height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '10px', overflow: 'hidden', marginTop: '1rem' }}>
+            <motion.div
+              initial={{ width: '0%' }}
+              animate={{ width: '100%' }}
+              transition={{ duration: 4, ease: 'easeInOut' }}
+              style={{ height: '100%', background: 'linear-gradient(90deg, var(--accent-primary), var(--accent-secondary), var(--accent-tertiary))' }}
+            ></motion.div>
           </div>
 
-          <button className="btn btn-secondary mt-12 animate-fade-in" style={{ animationDelay: '2s', opacity: 0 }} onClick={() => setShowSplash(false)}>Skip to Dashboard</button>
-        </div>
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 2.5 }}
+            className="btn btn-secondary mt-8"
+            onClick={() => setShowSplash(false)}
+          >
+            Launch Intelligence
+          </motion.button>
+        </motion.div>
       </div>
     );
   }
 
   return (
-    <div className={`app-wrapper ${mounted && !showSplash ? 'animate-fade-in' : ''}`}>
-      {/* Navigation */}
-      <nav className="glass-panel" style={{ position: 'sticky', top: 0, zIndex: 100, borderRadius: 0, borderTop: 'none', borderLeft: 'none', borderRight: 'none' }}>
-        <div className="container flex items-center justify-between" style={{ height: '70px' }}>
-          <div className="flex items-center gap-2">
-            <Compass className="text-accent-primary" size={28} />
-            <span className="font-bold text-xl" style={{ letterSpacing: '1px' }}>SkillBridge AI</span>
-          </div>
+    <div className="app-wrapper min-h-screen relative">
+      <div className="bg-mesh"></div>
 
-          <div className="flex gap-4">
-            <button
-              className={`btn ${activeTab === 'dashboard' ? 'btn-primary' : 'btn-icon'}`}
-              onClick={() => setActiveTab('dashboard')}
-            >
-              <Target size={18} /> <span className="hidden-mobile">Dashboard</span>
-            </button>
-            <button
-              className={`btn ${activeTab === 'path' ? 'btn-primary' : 'btn-icon'}`}
-              onClick={() => setActiveTab('path')}
-            >
-              <Map size={18} /> <span className="hidden-mobile">Career Path</span>
-            </button>
-            <button
-              className={`btn ${activeTab === 'recommendations' ? 'btn-primary' : 'btn-icon'}`}
-              onClick={() => setActiveTab('recommendations')}
-            >
-              <BookOpen size={18} /> <span className="hidden-mobile">Learning</span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="text-right hidden-mobile">
-              <div className="font-semibold text-sm">{userProfile.name}</div>
-              <div className="text-xs text-muted">{userProfile.currentRole}</div>
+      {/* Premium Navigation */}
+      <nav className="glass-panel" style={{ position: 'sticky', top: 0, zIndex: 100, borderRadius: 0, borderTop: 'none', borderLeft: 'none', borderRight: 'none', background: 'rgba(2, 6, 23, 0.8)' }}>
+        <div className="container flex items-center justify-between" style={{ height: '80px' }}>
+          <motion.div
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            className="flex items-center gap-3 cursor-pointer"
+            onClick={() => setActiveTab('dashboard')}
+          >
+            <div className="badge-primary" style={{ padding: '8px', borderRadius: '12px' }}>
+              <Compass size={28} className="text-accent-primary" />
             </div>
-            <div className="avatar" style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+            <span className="font-bold text-2xl" style={{ letterSpacing: '-1px' }}>SkillBridge <span className="text-accent-primary">AI</span></span>
+          </motion.div>
+
+          <div className="flex gap-2">
+            {[
+              { id: 'dashboard', icon: Target, label: 'Dashboard' },
+              { id: 'path', icon: Map, label: 'Roadmap' },
+              { id: 'recommendations', icon: BookOpen, label: 'Learning' }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                className={`btn ${activeTab === tab.id ? 'btn-primary' : 'btn-icon'}`}
+                style={{ borderRadius: '12px', padding: activeTab === tab.id ? '0.75rem 1.25rem' : '0.75rem' }}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                <tab.icon size={20} />
+                <span className={activeTab === tab.id ? 'block' : 'hidden'}>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <motion.div
+            initial={{ x: 20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            className="flex items-center gap-4"
+          >
+            <div className="text-right hidden-mobile">
+              <div className="font-bold text-sm">{userProfile.name}</div>
+              <div className="text-xs text-muted flex items-center gap-1 justify-end">
+                <Star size={10} className="text-status-warning" /> PRO Account
+              </div>
+            </div>
+            <div className="avatar glow-effect" style={{ width: '45px', height: '45px', borderRadius: '16px', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1.1rem', color: 'white' }}>
               AD
             </div>
-          </div>
+          </motion.div>
         </div>
       </nav>
 
-      {/* Main Content */}
-      <main className="container" style={{ padding: '2rem 1.5rem', minHeight: 'calc(100vh - 70px)' }}>
-
-        {/* Header Section */}
-        <div className="flex items-center justify-between" style={{ marginBottom: '2rem' }}>
-          <div>
-            <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Your Navigation Dashboard</h1>
-            <p className="text-muted">Bridging the gap to your target role: <strong className="text-main" style={{ color: 'white' }}>{userProfile.aspiration}</strong></p>
-          </div>
-          <div className="badge badge-primary glow-effect flex items-center gap-2" style={{ padding: '0.5rem 1rem' }}>
-            <Zap size={16} /> Data-Driven Mode Active
-          </div>
-        </div>
-
-        {activeTab === 'dashboard' && (
-          <div className="grid grid-cols-3 gap-6 animate-fade-in">
-            {/* Overview Card */}
-            <div className="card glass-panel flex-col gap-4" style={{ gridColumn: 'span 1' }}>
-              <div className="flex items-center gap-2 text-xl font-bold mb-2">
-                <Target className="text-accent-secondary" /> Readiness Score
-              </div>
-
-              <div className="flex items-center justify-center my-4">
-                <div style={{ position: 'relative', width: '150px', height: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: `conic-gradient(var(--accent-primary) ${overallProgress}%, rgba(255,255,255,0.1) 0)` }}>
-                  <div style={{ position: 'absolute', width: '130px', height: '130px', background: 'var(--bg-card)', borderRadius: '50%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ fontSize: '2.5rem', fontWeight: 'bold', color: 'var(--accent-primary)' }}>{overallProgress}%</span>
-                    <span className="text-xs text-muted text-center" style={{ marginTop: '-5px' }}>Match</span>
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-center text-sm text-muted">
-                You are {overallProgress}% ready for a Senior Full Stack Engineer role based on current industry demands.
-              </p>
-
-              <button className="btn btn-primary w-full mt-4" style={{ width: '100%' }} onClick={() => setActiveTab('recommendations')}>
-                Start Bridging Gap
-              </button>
-            </div>
-
-            {/* Radar Chart Card */}
-            <div className="card glass-panel" style={{ gridColumn: 'span 2' }}>
-              <div className="flex items-center gap-2 text-xl font-bold mb-4">
-                <TrendingUp className="text-accent-primary" /> Skill Gap Analysis
-              </div>
-              <div className="chart-container" style={{ height: '320px' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
-                    <PolarGrid stroke="rgba(255,255,255,0.2)" />
-                    <PolarAngleAxis dataKey="skill" tick={{ fill: 'var(--text-muted)', fontSize: 12 }} />
-                    <RechartsTooltip
-                      contentStyle={{ backgroundColor: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                      itemStyle={{ color: '#fff' }}
-                    />
-                    <Radar name="Current Skills" dataKey="current" stroke="var(--accent-primary)" fill="var(--accent-primary)" fillOpacity={0.5} />
-                    <Radar name="Required Skills" dataKey="required" stroke="var(--status-warning)" fill="var(--status-warning)" fillOpacity={0.3} />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="flex justify-center gap-6 mt-2 text-sm">
-                <div className="flex items-center gap-2"><div style={{ width: 12, height: 12, background: 'var(--accent-primary)', borderRadius: '50%' }}></div> Current</div>
-                <div className="flex items-center gap-2"><div style={{ width: 12, height: 12, background: 'var(--status-warning)', borderRadius: '50%' }}></div> Required for Target</div>
-              </div>
-            </div>
-
-            {/* Industry Trends */}
-            <div className="card glass-panel" style={{ gridColumn: 'span 3', marginTop: '1rem' }}>
-              <div className="flex items-center gap-2 text-xl font-bold mb-4">
-                <Briefcase className="text-accent-tertiary" /> Industry Skill Demands (Live Data)
-              </div>
-              <div className="chart-container" style={{ height: '250px' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={industryTrends} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.1)" />
-                    <XAxis type="number" tick={{ fill: 'var(--text-muted)' }} />
-                    <YAxis dataKey="name" type="category" tick={{ fill: 'var(--text-main)', fontSize: 13 }} width={120} />
-                    <RechartsTooltip
-                      contentStyle={{ backgroundColor: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
-                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                    />
-                    <Bar dataKey="demand" fill="var(--accent-tertiary)" radius={[0, 4, 4, 0]} barSize={20} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'path' && (
-          <div className="animate-fade-in grid grid-cols-1 gap-6">
-            <div className="card glass-panel relative overflow-hidden">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="flex items-center gap-3">
-                  <Map className="text-accent-primary" size={28} /> Career Roadmap
-                </h2>
-                <span className="badge badge-success">Target: {userProfile.aspiration}</span>
-              </div>
-
-              <div className="flex-col gap-8" style={{ position: 'relative', paddingLeft: '2rem' }}>
-                {/* Timeline Line */}
-                <div style={{ position: 'absolute', left: '2rem', top: '10px', bottom: '10px', width: '2px', background: 'rgba(255,255,255,0.1)' }}></div>
-
-                {/* Step 1 */}
-                <div className="flex gap-4 relative">
-                  <div style={{ position: 'absolute', left: '-5px', top: '5px', width: '12px', height: '12px', borderRadius: '50%', background: 'var(--status-success)', boxShadow: '0 0 10px var(--status-success)' }}></div>
-                  <div className="card flex-1" style={{ borderLeft: '4px solid var(--status-success)', margin: 0 }}>
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="text-lg">Master Core Frontend</h3>
-                      <span className="badge badge-success"><CheckCircle2 size={12} className="inline mr-1" />Completed</span>
-                    </div>
-                    <p className="text-sm text-muted mb-3">React, TypeScript, CSS Architecture</p>
-                    <div className="progress-bar"><div className="progress-fill" style={{ width: '100%', background: 'var(--status-success)' }}></div></div>
-                  </div>
-                </div>
-
-                {/* Step 2 */}
-                <div className="flex gap-4 relative mt-6">
-                  <div style={{ position: 'absolute', left: '-5px', top: '5px', width: '12px', height: '12px', borderRadius: '50%', background: 'var(--accent-primary)', boxShadow: '0 0 10px var(--accent-primary)' }}></div>
-                  <div className="card flex-1 glow-effect" style={{ borderLeft: '4px solid var(--accent-primary)', margin: 0 }}>
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="text-lg">Backend Integration & Node.js</h3>
-                      <span className="badge badge-primary">Current Focus</span>
-                    </div>
-                    <p className="text-sm text-muted mb-3">APIs, Express, Database Design, Auth</p>
-                    <div className="progress-bar"><div className="progress-fill" style={{ width: '45%' }}></div></div>
-                  </div>
-                </div>
-
-                {/* Step 3 */}
-                <div className="flex gap-4 relative mt-6 opacity-70">
-                  <div style={{ position: 'absolute', left: '-5px', top: '5px', width: '12px', height: '12px', borderRadius: '50%', background: 'var(--text-muted)' }}></div>
-                  <div className="card flex-1" style={{ borderLeft: '4px solid var(--text-muted)', margin: 0 }}>
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="text-lg">System Architecture</h3>
-                      <span className="badge text-muted" style={{ border: '1px solid var(--text-muted)' }}>Upcoming</span>
-                    </div>
-                    <p className="text-sm text-muted mb-3">Scalability, Microservices, Cloud Infrastructure</p>
-                    <div className="progress-bar"><div className="progress-fill" style={{ width: '0%' }}></div></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'recommendations' && (
-          <div className="animate-fade-in">
-            <h2 className="flex items-center gap-3 mb-6">
-              <Zap className="text-accent-secondary" size={28} /> AI-Curated Learning Path
-            </h2>
-            <p className="text-muted mb-8">
-              Based on your skill gap analysis, here are the top recommendations to achieve your goal of becoming a <strong>{userProfile.aspiration}</strong>.
-            </p>
-
-            <div className="grid grid-cols-1 gap-4">
-              {learningPaths.map(path => (
-                <div key={path.id} className="card glass-panel flex flex-col gap-4 transition-all hover:translate-x-2" style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-lg)' }}>
-                    {path.type === 'Course' ? <BookOpen size={24} className="text-accent-primary" /> :
-                      path.type === 'Bootcamp' ? <TrendingUp size={24} className="text-status-warning" /> :
-                        <Award size={24} className="text-accent-secondary" />}
-                  </div>
-
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-1">
-                      <h3 className="text-lg m-0">{path.title}</h3>
-                      <span className="badge badge-primary">{path.type}</span>
-                    </div>
-                    <div className="text-sm text-muted flex items-center gap-4">
-                      <span>By {path.provider}</span>
-                      <span>•</span>
-                      <span>{path.duration}</span>
-                      <span>•</span>
-                      <span className="flex gap-1">
-                        Targets: {path.skills.map((s, index) => (
-                          <span key={s}>
-                            <span className="text-accent-primary font-medium">{s}</span>
-                            {index < path.skills.length - 1 && ', '}
-                          </span>
-                        ))}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-end gap-2" style={{ minWidth: '120px' }}>
-                    <div className="text-sm font-semibold flex items-center gap-1 text-status-success">
-                      <CheckCircle2 size={14} /> {path.matchScore}% Match
-                    </div>
-                    <button className="btn btn-secondary text-sm" style={{ padding: '0.5rem 1rem' }}>
-                      Start <ChevronRight size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="card glass-panel mt-6" style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
-              <div className="flex items-start gap-4">
-                <AlertCircle className="text-accent-primary mt-1" size={24} />
+      {/* Main Content Area */}
+      <main className="container" style={{ padding: '3rem 1.5rem' }}>
+        <AnimatePresence mode="wait">
+          {activeTab === 'dashboard' && (
+            <motion.div
+              key="dashboard"
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              exit={{ opacity: 0, y: -20 }}
+              className="grid grid-cols-12 gap-6"
+            >
+              {/* Header Card */}
+              <motion.div variants={itemVariants} className="col-span-12 flex items-center justify-between mb-4">
                 <div>
-                  <h4 className="font-semibold text-accent-primary mb-1">Why these recommendations?</h4>
-                  <p className="text-sm text-muted">
-                    Our NLP models matched the syllables of your current backend deficiencies (+15% required logic vs +40% actual) against the syllabi of 10,000+ top-rated industry courses. System Design and Cloud infrastructure provide the highest ROI for your career transition.
+                  <h2 className="text-4xl font-extrabold mb-2">Welcome back, Alex.</h2>
+                  <p className="text-muted flex items-center gap-2">
+                    Target: <span className="text-main font-semibold px-2 py-0.5 rounded-lg bg-white/5">{userProfile.aspiration}</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent-primary animate-pulse"></span>
+                    <span className="text-accent-primary font-medium">Tracking Optimal Path</span>
                   </p>
                 </div>
-              </div>
-            </div>
-          </div>
-        )}
+                <div className="badge-primary flex items-center gap-2 px-6 py-3 rounded-2xl shadow-lg border-white/10">
+                  <Rocket size={20} className="animate-float" />
+                  <div className="text-left">
+                    <div className="text-[10px] uppercase tracking-widest font-bold opacity-60">Intelligence Status</div>
+                    <div className="text-sm font-bold">Active & Optimizing</div>
+                  </div>
+                </div>
+              </motion.div>
 
+              {/* Readiness Score Card */}
+              <motion.div variants={itemVariants} className="col-span-12 lg:col-span-4 card glass-panel shimmer">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl flex items-center gap-2"><Target className="text-accent-secondary" /> Readiness</h3>
+                  <span className="text-xs font-bold text-accent-secondary bg-accent-secondary/10 px-2 py-1 rounded-md">+4.2% this week</span>
+                </div>
+
+                <div className="flex flex-col items-center justify-center py-6">
+                  <div style={{ position: 'relative', width: '200px', height: '200px' }}>
+                    <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                      <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
+                      <motion.circle
+                        cx="50" cy="50" r="45"
+                        fill="none"
+                        stroke="var(--accent-primary)"
+                        strokeWidth="8"
+                        strokeDasharray="282.7"
+                        initial={{ strokeDashoffset: 282.7 }}
+                        animate={{ strokeDashoffset: 282.7 - (282.7 * overallProgress) / 100 }}
+                        transition={{ duration: 2, ease: "easeOut" }}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{ fontSize: '3.5rem', fontWeight: 900, color: 'white' }}>{overallProgress}%</span>
+                      <span className="text-xs uppercase tracking-[3px] text-muted -mt-2">Global Match</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4 mt-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted">Current Level</span>
+                    <span className="font-bold">Intermediate</span>
+                  </div>
+                  <div className="progress-bar"><div className="progress-fill" style={{ width: `${overallProgress}%` }}></div></div>
+                  <p className="text-xs text-muted leading-relaxed text-center italic">
+                    "Focusing on System Design will increase your score by 12 points."
+                  </p>
+                  <button className="btn btn-primary w-full shadow-lg" onClick={() => setActiveTab('recommendations')}>
+                    Close Skill Gaps <ChevronRight size={16} />
+                  </button>
+                </div>
+              </motion.div>
+
+              {/* Radar Chart Card */}
+              <motion.div variants={itemVariants} className="col-span-12 lg:col-span-8 card glass-panel">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl flex items-center gap-2"><TrendingUp className="text-accent-primary" /> Skill Architecture</h3>
+                  <div className="flex gap-4 text-xs font-bold">
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-accent-primary"></span> Current</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-white/20"></span> Target</span>
+                  </div>
+                </div>
+
+                <div style={{ height: '360px', width: '100%' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
+                      <PolarGrid stroke="rgba(255,255,255,0.05)" />
+                      <PolarAngleAxis dataKey="skill" tick={{ fill: 'var(--text-muted)', fontSize: 13, fontWeight: 500 }} />
+                      <RechartsTooltip
+                        contentStyle={{ backgroundColor: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}
+                      />
+                      <Radar name="Target Profile" dataKey="required" stroke="rgba(255,255,255,0.2)" fill="rgba(255,255,255,0.1)" fillOpacity={0.1} />
+                      <Radar name="Your Profile" dataKey="current" stroke="var(--accent-primary)" fill="var(--accent-primary)" fillOpacity={0.4} />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+              </motion.div>
+
+              {/* Bar Chart Trends */}
+              <motion.div variants={itemVariants} className="col-span-12 card glass-panel">
+                <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h3 className="text-xl flex items-center gap-2"><Globe className="text-accent-tertiary" /> Market Intelligence</h3>
+                    <p className="text-sm text-muted mt-1">Real-time demand across top tech hubs</p>
+                  </div>
+                  <div className="badge-primary">Live Updates</div>
+                </div>
+
+                <div style={{ height: '280px', width: '100%' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={industryTrends} margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                      <RechartsTooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: 'var(--bg-card)', border: 'none', borderRadius: '12px', color: 'white' }} />
+                      <Bar dataKey="demand" radius={[10, 10, 0, 0]} barSize={50}>
+                        {industryTrends.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} fillOpacity={0.8} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+
+          {activeTab === 'path' && (
+            <motion.div
+              key="path"
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="max-w-4xl mx-auto"
+            >
+              <div className="flex flex-col items-center mb-12 text-center">
+                <div className="badge-primary mb-4">Trajectory Path</div>
+                <h2 className="text-4xl font-extrabold mb-4">Your Intelligent Journey</h2>
+                <p className="text-muted max-w-xl">We've mapped your evolution from a Junior Developer to a Senior Full Stack Engineer. Follow the sequence for maximum career acceleration.</p>
+              </div>
+
+              <div className="relative space-y-12">
+                {/* Visual Connector Line */}
+                <div className="absolute left-[39px] top-4 bottom-4 w-1 bg-gradient-to-b from-status-success via-accent-primary to-white/5 rounded-full"></div>
+
+                {/* Milestone 1 */}
+                <motion.div variants={itemVariants} className="flex gap-8 relative z-10">
+                  <div className="w-20 h-20 rounded-2xl bg-status-success/20 border-2 border-status-success flex items-center justify-center text-status-success shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+                    <CheckCircle2 size={36} />
+                  </div>
+                  <div className="flex-1 card glass-panel">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="text-xl font-bold">Frontend Foundations</h4>
+                      <span className="badge badge-success px-4 py-1.5 rounded-xl">Verified</span>
+                    </div>
+                    <p className="text-muted leading-relaxed">
+                      You have demonstrated mastery in <span className="text-main">React v18, TypeScript 5.0</span>, and modern state management. This is the bedrock of your stack.
+                    </p>
+                    <div className="flex gap-2 mt-4 text-xs">
+                      {['React', 'TypeScript', 'CSS/PostCSS'].map(s => <span key={s} className="bg-white/5 px-2 py-1 rounded-md border border-white/10">{s}</span>)}
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Milestone 2 */}
+                <motion.div variants={itemVariants} className="flex gap-8 relative z-10">
+                  <div className="w-20 h-20 rounded-2xl bg-accent-primary/20 border-2 border-accent-primary flex items-center justify-center text-accent-primary shadow-[0_0_20px_rgba(56,189,248,0.3)] shimmer">
+                    <Briefcase size={36} />
+                  </div>
+                  <div className="flex-1 card glass-panel shadow-2xl border-accent-primary/20">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="text-xl font-bold">Full Stack Integration</h4>
+                      <span className="badge badge-primary px-4 py-1.5 rounded-xl animate-pulse">Critical Phase</span>
+                    </div>
+                    <p className="text-muted leading-relaxed">
+                      Bridge your skills by deep-diving into <span className="text-main">Distributed Systems and Node.js Architectures</span>. This transition represents 60% of your career growth potential.
+                    </p>
+                    <div className="mt-4 space-y-2">
+                      <div className="flex justify-between text-xs font-bold mb-1">
+                        <span className="text-accent-primary">Estimated completion: 8 weeks</span>
+                        <span>45% Progress</span>
+                      </div>
+                      <div className="progress-bar"><div className="progress-fill" style={{ width: '45%' }}></div></div>
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Milestone 3 */}
+                <motion.div variants={itemVariants} className="flex gap-8 relative z-10 opacity-50">
+                  <div className="w-20 h-20 rounded-2xl bg-white/5 border-2 border-white/10 flex items-center justify-center text-muted">
+                    <Rocket size={36} />
+                  </div>
+                  <div className="flex-1 card glass-panel">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="text-xl font-bold">Cloud-Native Mastery</h4>
+                      <span className="text-xs uppercase tracking-widest font-bold opacity-60">Locked</span>
+                    </div>
+                    <p className="text-muted">
+                      Deploy scalable infrastructure using <span className="text-main">AI-driven auto-scaling, Kubernetes</span>, and serverless edge computing.
+                    </p>
+                  </div>
+                </motion.div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'recommendations' && (
+            <motion.div
+              key="learning"
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              exit={{ opacity: 0, x: 20 }}
+              className="space-y-8"
+            >
+              <div className="bg-gradient-to-r from-accent-primary/20 to-accent-secondary/20 p-8 rounded-3xl border border-white/10 backdrop-blur-xl">
+                <div className="flex gap-6 items-center">
+                  <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center shadow-inner">
+                    <Zap size={32} className="text-accent-primary animate-float" />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-bold">AI Recommended Stacks</h2>
+                    <p className="text-muted">High-ROI knowledge acquisition tailored to your unique profile and current market gaps.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6">
+                {learningPaths.map((path, idx) => (
+                  <motion.div
+                    key={path.id}
+                    variants={itemVariants}
+                    whileHover={{ scale: 1.01, x: 5 }}
+                    className="card glass-panel flex flex-col md:flex-row items-center gap-8 group"
+                  >
+                    <div className="w-full md:w-48 h-32 rounded-2xl bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center relative overflow-hidden">
+                      {path.id === 1 ? <BookOpen size={40} className="text-accent-primary" /> :
+                        path.id === 2 ? <TrendingUp size={40} className="text-accent-tertiary" /> :
+                          <Award size={40} className="text-accent-secondary" />}
+                      <div className="absolute top-0 right-0 p-3">
+                        <div className="badge-primary text-[10px]">{path.difficulty}</div>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 text-left">
+                      <div className="flex flex-wrap items-center gap-3 mb-2">
+                        <h3 className="text-2xl font-bold group-hover:text-accent-primary transition-colors">{path.title}</h3>
+                        <span className="badge-primary px-3 py-1 bg-accent-primary/5 border-accent-primary/20 text-accent-primary">{path.type}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-4 text-sm text-muted mb-4">
+                        <span className="flex items-center gap-1.5"><Globe size={14} /> {path.provider}</span>
+                        <span className="flex items-center gap-1.5"><Briefcase size={14} /> {path.duration}</span>
+                        <span className="flex items-center gap-1.5"><Users size={14} /> 12.5k Enrolled</span>
+                      </div>
+                      <div className="flex gap-2">
+                        {path.skills.map(s => <span key={s} className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-wider">{s}</span>)}
+                      </div>
+                    </div>
+
+                    <div className="w-full md:w-auto flex flex-col items-center md:items-end gap-3 min-w-[160px]">
+                      <div className="text-2xl font-black text-status-success flex items-center gap-2">
+                        {path.matchScore}% <span className="text-[10px] uppercase tracking-widest text-muted">Match</span>
+                      </div>
+                      <button className="btn btn-primary w-full group-hover:shadow-[0_0_20px_var(--accent-glow)]">
+                        Unlock Content <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+
+              <div className="card glass-panel" style={{ borderLeft: '10px solid var(--accent-primary)', background: 'linear-gradient(90deg, rgba(56, 189, 248, 0.1), transparent)' }}>
+                <div className="flex items-start gap-6">
+                  <div className="p-3 bg-accent-primary/20 rounded-xl">
+                    <AlertCircle className="text-accent-primary" size={32} />
+                  </div>
+                  <div>
+                    <h4 className="text-xl font-bold mb-2">AI Reasoning Engine</h4>
+                    <p className="text-muted leading-relaxed">
+                      Our intelligence analyzed 14.5M job descriptions across LinkedIn, Glassdoor, and Indeed. <span className="text-accent-primary font-semibold">92% of "Senior Full Stack" roles</span> now mandate experience with cloud-native system design. We've prioritized these courses to minimize your "Time-to-Hire" by an estimated <span className="text-main font-bold">3.5 months</span>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
+
+      {/* Footer Decoration */}
+      <footer className="container py-12 border-t border-white/5 mt-12">
+        <div className="flex flex-col md:flex-row items-center justify-between text-muted text-sm gap-6">
+          <div className="flex items-center gap-2">
+            <Compass size={20} className="text-accent-primary" />
+            <span className="font-bold">SkillBridge AI v4.2.0</span>
+          </div>
+          <div className="flex gap-8">
+            <a href="#" className="hover:text-main">Neural Engine</a>
+            <a href="#" className="hover:text-main">Privacy Architecture</a>
+            <a href="#" className="hover:text-main">API Access</a>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex -space-x-2">
+              {[1, 2, 3, 4].map(i => <div key={i} className="w-8 h-8 rounded-full border-2 border-bg-dark bg-accent-secondary flex items-center justify-center text-[10px] font-bold">U{i}</div>)}
+            </div>
+            <span>+150k Active Navigators</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
