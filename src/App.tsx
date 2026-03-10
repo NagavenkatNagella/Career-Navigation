@@ -323,8 +323,70 @@ function SplashScreen() {
           }}
         />
 
-        {/* Center Logo with Zoom & Flow */}
-        <div style={{ position: 'relative', width: 'fit-content', margin: '0 auto' }}>
+        {/* Center Logo with Zoom, Flow & Animated Frame */}
+        <div style={{ position: 'relative', width: 'fit-content', margin: '0 auto', padding: 'clamp(20px, 5vw, 40px)' }}>
+          {/* Unique Futuristic Frame */}
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+            {/* Corners */}
+            {[0, 90, 180, 270].map((rot) => (
+              <motion.div
+                key={rot}
+                initial={{ opacity: 0, scale: 1.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 1.5, delay: 0.2 + rot / 360 }}
+                style={{
+                  position: 'absolute',
+                  width: 'clamp(30px, 8vw, 60px)',
+                  height: 'clamp(30px, 8vw, 60px)',
+                  borderTop: '3px solid var(--accent-1)',
+                  borderLeft: '3px solid var(--accent-1)',
+                  top: rot === 0 || rot === 90 ? 0 : 'auto',
+                  bottom: rot === 180 || rot === 270 ? 0 : 'auto',
+                  left: rot === 0 || rot === 270 ? 0 : 'auto',
+                  right: rot === 90 || rot === 180 ? 0 : 'auto',
+                  transform: `rotate(${rot}deg)`,
+                  filter: 'drop-shadow(0 0 8px var(--accent-1))',
+                  borderRadius: '4px 0 0 0'
+                }}
+              >
+                <motion.div 
+                  animate={{ opacity: [0.4, 1, 0.4] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                  style={{ position: 'absolute', top: -10, left: 10, width: 4, height: 4, background: 'var(--accent-1)', borderRadius: '50%' }}
+                />
+              </motion.div>
+            ))}
+
+            {/* Pulsing Outer Ring */}
+            <motion.div
+              animate={{ 
+                scale: [1, 1.05, 1],
+                opacity: [0.2, 0.4, 0.2],
+              }}
+              transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+              style={{
+                position: 'absolute',
+                inset: '-5%',
+                border: '1px double rgba(56,189,248,0.2)',
+                borderRadius: '20px',
+                zIndex: -1
+              }}
+            />
+            
+            {/* Rotating Data HUD Elements */}
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 40, repeat: Infinity, ease: 'linear' }}
+              style={{
+                position: 'absolute',
+                inset: '-15%',
+                border: '1px dashed rgba(124,58,237,0.1)',
+                borderRadius: '50%',
+                zIndex: -2
+              }}
+            />
+          </div>
+
           <motion.div
             animate={{ 
               scale: [1, 1.02, 1],
@@ -341,7 +403,7 @@ function SplashScreen() {
               src="/logo.png" 
               alt="SkillBridge Logo" 
               style={{ 
-                width: 'clamp(280px, 45vw, 520px)', 
+                width: 'clamp(260px, 40vw, 480px)', 
                 height: 'auto', 
                 display: 'block' 
               }} 
