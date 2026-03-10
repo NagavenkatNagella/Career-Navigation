@@ -197,6 +197,25 @@ export default function App() {
 // SPLASH SCREEN
 // ═══════════════════════════════════════════════════════════════
 function SplashScreen() {
+  const [quote, setQuote] = useState("");
+  const quotes = [
+    "Navigate Tomorrow's Industry, Today.",
+    "Bridge the Gap: From Learner to Leader.",
+    "Data-Driven Decisions, AI-Powered Future.",
+    "Your Career Architecture, Redefined."
+  ];
+
+  useEffect(() => {
+    const selected = quotes[Math.floor(Math.random() * quotes.length)];
+    let i = 0;
+    const timer = setInterval(() => {
+      setQuote(selected.slice(0, i));
+      i++;
+      if (i > selected.length) clearInterval(timer);
+    }, 50);
+    return () => clearInterval(timer);
+  }, []);
+
   const floatingIcons = [
     { icon: <BrainCircuit size={24} />, x: '-30%', y: '-25%', delay: 0 },
     { icon: <Zap size={20} />, x: '35%', y: '-15%', delay: 0.5 },
@@ -347,6 +366,25 @@ function SplashScreen() {
           />
         </div>
 
+        {/* Animated Quotation */}
+        <div style={{ marginTop: '2.5rem', minHeight: '1.5rem', overflow: 'hidden' }}>
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.5 }}
+            style={{ 
+              fontFamily: 'var(--font-display)', 
+              fontSize: 'clamp(1rem, 2.5vw, 1.25rem)', 
+              color: 'var(--text-secondary)', 
+              fontWeight: 600, 
+              letterSpacing: '0.05em',
+              textShadow: '0 0 10px rgba(255,255,255,0.1)'
+            }}
+          >
+            {quote}<span style={{ display: 'inline-block', width: '2px', height: '1.2em', background: 'var(--accent-1)', marginLeft: '4px', verticalAlign: 'middle' }}></span>
+          </motion.p>
+        </div>
+
         {/* Logo Shadow/Glow Base */}
         <motion.div 
           animate={{ opacity: [0.1, 0.2, 0.1], scale: [1, 1.2, 1] }}
@@ -365,15 +403,16 @@ function SplashScreen() {
 
       {/* Finishing Touch: Particle Field */}
       <div style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none' }}>
-        {[...Array(15)].map((_, i) => (
+        {[...Array(20)].map((_, i) => (
           <motion.div
             key={i}
             animate={{ 
-              y: [-10, 10, -10],
-              opacity: [0.2, 0.5, 0.2],
+              y: [-15, 15, -15],
+              x: [-10, 10, -10],
+              opacity: [0.1, 0.4, 0.1],
             }}
             transition={{ 
-              duration: 3 + Math.random() * 4, 
+              duration: 3 + Math.random() * 5, 
               repeat: Infinity,
               delay: Math.random() * 2 
             }}
@@ -385,7 +424,7 @@ function SplashScreen() {
               height: 2 + Math.random() * 3,
               background: i % 2 === 0 ? 'var(--accent-1)' : 'var(--accent-2)',
               borderRadius: '50%',
-              filter: 'blur(1px)'
+              filter: 'blur(1.5px)'
             }}
           />
         ))}
