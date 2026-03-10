@@ -4,7 +4,7 @@ import {
   BrainCircuit, Target, Map, BookOpen, Users,
   ChevronRight, Zap, CheckCircle2, AlertCircle, TrendingUp,
   Award, Globe, Rocket, ShieldCheck, Cloud, Briefcase,
-  GraduationCap, Star, BarChart3, Lock, Menu, X
+  Star, BarChart3, Lock, Menu, X
 } from 'lucide-react';
 import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis,
@@ -124,8 +124,8 @@ export default function App() {
             <nav className="navbar" style={{ position:'sticky', top:0, zIndex:200 }}>
               <div className="container flex items-center justify-between" style={{ height:'68px' }}>
                 <div className="flex items-center gap-3">
-                  <div style={{ width:40, height:40, borderRadius:12, background:'linear-gradient(135deg,#38bdf8,#7c3aed)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    <BrainCircuit size={22} color="#fff" />
+                  <div style={{ width:40, height:40, borderRadius:10, overflow:'hidden', background:'rgba(255,255,255,0.05)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <img src="/logo.png" alt="Logo" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
                   </div>
                   <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.15rem', letterSpacing:'-0.03em' }}>
                     Skill<span style={{ color:'var(--accent-1)' }}>Bridge</span> <span style={{ fontSize:'0.7rem', fontWeight:700, color:'var(--text-muted)', letterSpacing:'0.1em' }}>AI</span>
@@ -492,8 +492,8 @@ function LoginScreen({ onLogin }: { onLogin:()=>void }) {
             </div>
 
             <div style={{ display:'flex', justifyContent:'center', marginBottom:'1.75rem' }}>
-              <div style={{ width:52, height:52, borderRadius:16, background:'linear-gradient(135deg,rgba(56,189,248,0.2),rgba(124,58,237,0.2))', display:'flex', alignItems:'center', justifyContent:'center', border:'1px solid rgba(56,189,248,0.3)' }}>
-                <ShieldCheck size={26} color="var(--accent-1)" />
+              <div style={{ width:60, height:60, borderRadius:16, overflow:'hidden', background:'rgba(255,255,255,0.05)', display:'flex', alignItems:'center', justifyContent:'center', border:'1px solid rgba(56,189,248,0.2)' }}>
+                <img src="/logo.png" alt="Logo" style={{ width:'80%', height:'80%', objectFit:'contain' }} />
               </div>
             </div>
 
@@ -551,8 +551,8 @@ function OnboardingScreen({ onDone }: { onDone:(n:string,e:string,g:CareerPathTy
       <div style={{ width:'100%', maxWidth:700 }}>
         <motion.div variants={stagger} initial="hidden" animate="visible" className="glass" style={{ padding:'3rem' }}>
           <motion.div variants={fadeUp} style={{ textAlign:'center', marginBottom:'2.5rem' }}>
-            <div style={{ width:64, height:64, borderRadius:20, background:'linear-gradient(135deg,rgba(56,189,248,0.15),rgba(124,58,237,0.15))', border:'1px solid rgba(56,189,248,0.3)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 1.25rem', color:'var(--accent-1)' }}>
-              <GraduationCap size={32} />
+            <div style={{ width:70, height:70, borderRadius:20, overflow:'hidden', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(56,189,248,0.2)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 1.25rem' }}>
+              <img src="/logo.png" alt="Logo" style={{ width:'80%', height:'80%', objectFit:'contain' }} />
             </div>
             <h2 style={{ fontFamily:'var(--font-display)', fontSize:'2rem', fontWeight:800, marginBottom:'0.5rem' }}>Build Your Career DNA</h2>
             <p style={{ color:'var(--text-muted)' }}>Tell us about yourself — we'll craft a personalized roadmap.</p>
