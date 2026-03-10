@@ -123,12 +123,14 @@ export default function App() {
   const [user, setUser] = useState<UserProfile>({
     name: '', education: '', goal: 'software-dev',
     experienceLevel: 'beginner',
-    skills: { Fundamentals: 0, 'Core Skills': 0, 'Advanced Concepts': 0, Tools: 0, 'Industry Prep': 0 }
+    skills: { Fundamentals: 0, 'Core Skills': 0, 'Advanced Concepts': 0, Tools: 0, 'Industry Prep': 0 },
+    mentors: [], mentees: []
   });
 
   const [qIdx, setQIdx] = useState(0);
   const [score, setScore] = useState(0);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [successNotif, setSuccessNotif] = useState<{ title: string, message: string } | null>(null);
 
   useEffect(() => {
     const splashTimer = setTimeout(() => {
@@ -138,48 +140,24 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
       if (authUser) {
         try {
-          // If we are already in main or assessment, don't interrupt
-          if (view === 'main' || view === 'assessment') return;
-
+          // Nav handling only
           const userDoc = await getDoc(doc(db, 'users', authUser.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
-            console.log("Auth System: Profile confirmed", userData);
-            
             const dbRole = userData.role as 'user' | 'mentor' || 'user';
             setRole(dbRole);
             
-            setUser(prev => ({ 
-              ...prev, 
-              name: userData.name || authUser.displayName || '',
-              education: userData.education || prev.education,
-              goal: userData.goal || prev.goal,
-              skills: userData.skills || prev.skills,
-              bio: userData.bio || prev.bio,
-              role: dbRole,
-              onboarded: !!userData.onboarded
-            }));
-
             if (userData.onboarded) {
-              setView('main');
-              setActiveTab(dbRole === 'mentor' ? 'mentor-stats' : 'dashboard');
+              if (view === 'splash' || view === 'role-selection' || view === 'login') {
+                setView('main');
+                setActiveTab(dbRole === 'mentor' ? 'mentor-stats' : 'dashboard');
+              }
             } else if (view === 'splash' || view === 'role-selection' || view === 'login') {
               setView('onboarding');
             }
-            clearTimeout(splashTimer);
-          } else {
-            if (view === 'splash') setView('role-selection');
           }
-        } catch (err: any) {
-          console.error("Auth state fetch failed:", err);
-          // If Firestore fails but Auth is valid, still try to onboard if we're on login screen
-          if (view === 'login' || view === 'splash') {
-            setView('onboarding');
-          }
-          
-          if (err.message?.includes('offline') || err.message?.includes('network')) {
-            setGlobalError("Connectivity issue detected. Syncing in background...");
-          }
+        } catch (err) {
+          console.error("Auth routing failed:", err);
         }
       }
     });
@@ -187,7 +165,20 @@ export default function App() {
       clearTimeout(splashTimer);
       unsubscribe();
     };
-  }, []);
+  }, [view]);
+
+  // Real-time Profile Sync
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    const unsubscribe = onSnapshot(doc(db, 'users', auth.currentUser.uid), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data() as UserProfile;
+        setUser(prev => ({ ...prev, ...data }));
+        if (data.role) setRole(data.role);
+      }
+    });
+    return () => unsubscribe();
+  }, [auth.currentUser]);
 
   useEffect(() => {
     if (globalError) {
@@ -195,6 +186,13 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [globalError]);
+
+  useEffect(() => {
+    if (successNotif) {
+      const timer = setTimeout(() => setSuccessNotif(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [successNotif]);
 
   const handleLoginSucceed = async (selectedRole: 'user' | 'mentor', isOnboarded?: boolean) => {
     setRole(selectedRole);
@@ -260,8 +258,7 @@ export default function App() {
       setView('main');
       setActiveTab('mentor-stats');
     } else {
-      setView('main');
-      setActiveTab('dashboard');
+      setView('assessment');
     }
   };
 
@@ -318,6 +315,36 @@ export default function App() {
             <span style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 600 }}>{globalError}</span>
             <button onClick={() => setGlobalError(null)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', opacity: 0.7, display: 'flex' }}>
               <X size={16} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {successNotif && (
+          <motion.div 
+            initial={{ y: 80, opacity: 0, scale: 0.9 }} 
+            animate={{ y: 0, opacity: 1, scale: 1 }} 
+            exit={{ y: 80, opacity: 0, scale: 0.8 }}
+            style={{ 
+              position: 'fixed', bottom: '2.5rem', left: '50%', transform: 'translateX(-50%)', 
+              zIndex: 10000, 
+              background: 'rgba(16, 185, 129, 0.98)', 
+              backdropFilter: 'blur(16px)',
+              padding: '1.25rem 2.5rem', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.25)',
+              display: 'flex', alignItems: 'center', gap: '1.25rem', boxShadow: '0 25px 60px rgba(0,0,0,0.4)'
+            }}
+          >
+            <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <CheckCircle2 size={24} color="#fff" />
+            </div>
+            <div>
+              <div style={{ color: '#fff', fontSize: '1.05rem', fontWeight: 800, marginBottom: '2px', letterSpacing: '-0.01em' }}>{successNotif.title}</div>
+              <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.85rem', fontWeight: 600 }}>{successNotif.message}</div>
+            </div>
+            <div style={{ width: '1px', height: '32px', background: 'rgba(255,255,255,0.2)', margin: '0 0.5rem' }} />
+            <button onClick={() => setSuccessNotif(null)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', opacity: 0.8, padding: '8px' }}>
+              <X size={20} />
             </button>
           </motion.div>
         )}
@@ -441,13 +468,13 @@ export default function App() {
                 {activeTab === 'dashboard' && <DashboardTab key="db" user={user} score={score} setActiveTab={setActiveTab} />}
                 {activeTab === 'path' && <RoadmapTab key="rt" user={user} />}
                 {activeTab === 'recommendations' && <ResourcesTab key="res" user={user} />}
-                {activeTab === 'mentors' && <MentorsTab key="mt" user={user} />}
+                {activeTab === 'mentors' && <MentorsTab key="mt" user={user} onNotify={(name) => setSuccessNotif({ title: 'Request Dispatched!', message: `Connected with mentor: ${name}` })} />}
                 {activeTab === 'profile' && <ProfileTab key="prof" user={user} setUser={setUser} />}
                 {activeTab === 'mentor-stats' && <MentorDashboard key="mstats" />}
                 {activeTab === 'mentor-users' && <MentorUserManagement key="musers" />}
                 {activeTab === 'chat' && <ChatTab key="chat" user={user} role={role} />}
                 {activeTab === 'resources-hub' && <ResourcesHub key="rhub" user={user} role={role} />}
-                {activeTab === 'communities' && <CommunitiesTab key="comm" user={user} role={role} />}
+                {activeTab === 'communities' && <CommunitiesTab key="comm" user={user} role={role} onNotify={(msg) => setSuccessNotif({ title: 'Welcome to the Community!', message: msg })} />}
               </AnimatePresence>
             </main>
           </motion.div>
@@ -1458,7 +1485,7 @@ function OnboardingScreen({ role, onDone }: { role: 'user' | 'mentor'; onDone: (
                 setFormError('');
                 setProcessing(true);
                 try {
-                  await onDone(name, edu, goal, { bio, skills, role: 'user', onboardedAt: new Date().toISOString() });
+                  await onDone(name, edu, goal, { bio, skills, role: role, onboardedAt: new Date().toISOString() });
                 } catch (err) {
                   setFormError('Connection issue. Please try again.');
                 } finally {
@@ -1795,7 +1822,7 @@ function ResourcesTab({ user }: { user:UserProfile }) {
 // ═══════════════════════════════════════════════════════════════
 // MENTORS TAB
 // ═══════════════════════════════════════════════════════════════
-function MentorsTab({ user }: { user:UserProfile }) {
+function MentorsTab({ user, onNotify }: { user:UserProfile, onNotify: (mentorName: string) => void }) {
   const [mentors, setMentors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1844,10 +1871,10 @@ function MentorsTab({ user }: { user:UserProfile }) {
         status: 'pending',
         timestamp: new Date().toISOString()
       }, { merge: true });
-      alert(`Mentorship request sent to ${mentor.name}!`);
+      onNotify(mentor.name);
     } catch (err) {
       console.error("Error sending request:", err);
-      alert("Failed to send request. Please try again.");
+      // Fallback for UI if error occurs
     }
   };
 
@@ -2620,7 +2647,7 @@ function ResourcesHub({ user, role }: { user: UserProfile, role: 'user' | 'mento
 // ═══════════════════════════════════════════════════════════════
 // COMMUNITIES & GROUPS
 // ═══════════════════════════════════════════════════════════════
-function CommunitiesTab({ user, role }: { user: UserProfile, role: 'user' | 'mentor' }) {
+function CommunitiesTab({ user, role, onNotify }: { user: UserProfile, role: 'user' | 'mentor', onNotify?: (msg: string) => void }) {
   const [groups, setGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -2668,7 +2695,7 @@ function CommunitiesTab({ user, role }: { user: UserProfile, role: 'user' | 'men
       await updateDoc(doc(db, 'groups', groupId), {
         members: arrayUnion(auth.currentUser.uid)
       });
-      alert("Success! You've joined the community.");
+      if (onNotify) onNotify("Establish collaboration with peers in this space.");
     } catch (err) {
       console.error("Join failed:", err);
     }
