@@ -197,103 +197,199 @@ export default function App() {
 // SPLASH SCREEN
 // ═══════════════════════════════════════════════════════════════
 function SplashScreen() {
+  const floatingIcons = [
+    { icon: <BrainCircuit size={24} />, x: '-30%', y: '-25%', delay: 0 },
+    { icon: <Zap size={20} />, x: '35%', y: '-15%', delay: 0.5 },
+    { icon: <Rocket size={22} />, x: '-25%', y: '25%', delay: 1 },
+    { icon: <Target size={24} />, x: '30%', y: '20%', delay: 1.5 },
+    { icon: <Globe size={20} />, x: '0%', y: '-35%', delay: 2 },
+  ];
+
   return (
     <motion.div
       key="sp"
       initial={{ opacity: 1 }}
-      exit={{ opacity: 0, scale: 1.1, filter: 'blur(10px)' }}
-      transition={{ duration: 1.2, ease: [0.7, 0, 0.3, 1] }}
+      exit={{ opacity: 0, scale: 1.1, filter: 'blur(15px)' }}
+      transition={{ duration: 1.5, ease: [0.7, 0, 0.3, 1] }}
       style={{ 
         position: 'fixed', 
         inset: 0, 
         zIndex: 9999, 
         background: 'var(--bg-base)', 
         display: 'flex', 
-        flexDirection: 'column', 
         alignItems: 'center', 
         justifyContent: 'center', 
         overflow: 'hidden' 
       }}
     >
-      {/* Vignette Effect */}
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle, transparent 20%, rgba(0,0,0,0.8) 100%)', pointerEvents: 'none', zIndex: 3 }}></div>
+      {/* Dynamic Background Atmosphere */}
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at center, transparent 0%, rgba(2,8,23,0.8) 100%)', zIndex: 3 }}></div>
       
-      {/* Cinematic Deep Background Orbs */}
       <motion.div 
         animate={{ 
-          scale: [1, 1.2, 1],
-          opacity: [0.3, 0.5, 0.3],
-          x: [-20, 20, -20],
-          y: [-20, 20, -20]
+          scale: [1, 1.1, 1],
+          rotate: [0, 5, -5, 0]
         }}
-        transition={{ duration: 15, repeat: Infinity, ease: 'linear' }}
-        className="orb orb-blue" 
-        style={{ width: 800, height: 800, top: '-10%', left: '-15%', filter: 'blur(120px)', zIndex: 1 }} 
-      />
-      <motion.div 
-        animate={{ 
-          scale: [1.2, 1, 1.2],
-          opacity: [0.3, 0.5, 0.3],
-          x: [20, -20, 20],
-          y: [20, -20, 20]
-        }}
-        transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
-        className="orb orb-purple" 
-        style={{ width: 700, height: 700, bottom: '-20%', right: '-15%', filter: 'blur(120px)', zIndex: 1 }} 
-      />
-
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.8 }} 
-        animate={{ opacity: 1, scale: 1 }} 
-        transition={{ duration: 2, ease: [0.16, 1, 0.3, 1] }} 
-        style={{ textAlign: 'center', position: 'relative', zIndex: 4 }}
+        transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
+        style={{ position: 'absolute', inset: 0, zIndex: 1 }}
       >
-        {/* Logo Container */}
-        <div style={{ position: 'relative', width: 'fit-content', margin: '0 auto 3rem' }}>
+        <div className="orb orb-blue" style={{ width: 900, height: 900, top: '-10%', left: '-20%', filter: 'blur(140px)', opacity: 0.4 }} />
+        <div className="orb orb-purple" style={{ width: 800, height: 800, bottom: '-15%', right: '-15%', filter: 'blur(140px)', opacity: 0.4 }} />
+      </motion.div>
+
+      {/* Floating Background Elements */}
+      {floatingIcons.map((item, i) => (
+        <motion.div
+          key={i}
+          initial={{ opacity: 0, scale: 0 }}
+          animate={{ 
+            opacity: [0.1, 0.3, 0.1], 
+            scale: [1, 1.1, 1],
+            y: ['0%', '10%', '0%'],
+            x: ['0%', '5%', '0%']
+          }}
+          transition={{ 
+            duration: 5 + i, 
+            repeat: Infinity, 
+            delay: item.delay,
+            ease: 'easeInOut' 
+          }}
+          style={{ 
+            position: 'absolute', 
+            left: `calc(50% + ${item.x})`, 
+            top: `calc(50% + ${item.y})`, 
+            color: 'var(--accent-1)',
+            zIndex: 2,
+            filter: 'drop-shadow(0 0 10px rgba(56,189,248,0.3))'
+          }}
+        >
+          {item.icon}
+        </motion.div>
+      ))}
+
+      {/* Main Branding Container */}
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.85 }} 
+        animate={{ opacity: 1, scale: 1.05 }} 
+        transition={{ duration: 4, ease: [0.16, 1, 0.3, 1] }} 
+        style={{ textAlign: 'center', position: 'relative', zIndex: 5, width: '100%', maxWidth: '900px' }}
+      >
+        {/* Revolving Orbiting Rings */}
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 15, repeat: Infinity, ease: 'linear' }}
+          style={{ 
+            position: 'absolute', 
+            top: '50%', left: '50%', 
+            transform: 'translate(-50%, -50%)',
+            width: 'clamp(350px, 60vw, 700px)', 
+            height: 'clamp(350px, 60vw, 700px)', 
+            border: '1px dashed rgba(56,189,248,0.2)', 
+            borderRadius: '50%',
+            pointerEvents: 'none'
+          }}
+        />
+        <motion.div
+          animate={{ rotate: -360 }}
+          transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
+          style={{ 
+            position: 'absolute', 
+            top: '50%', left: '50%', 
+            transform: 'translate(-50%, -50%)',
+            width: 'clamp(450px, 75vw, 850px)', 
+            height: 'clamp(450px, 75vw, 850px)', 
+            border: '1px solid rgba(124,58,237,0.1)', 
+            borderRadius: '50%',
+            pointerEvents: 'none'
+          }}
+        />
+
+        {/* Center Logo with Zoom & Flow */}
+        <div style={{ position: 'relative', width: 'fit-content', margin: '0 auto' }}>
           <motion.div
             animate={{ 
-              y: [0, -10, 0],
-              filter: ['drop-shadow(0 0 20px rgba(56,189,248,0.2))', 'drop-shadow(0 0 40px rgba(56,189,248,0.5))', 'drop-shadow(0 0 20px rgba(56,189,248,0.2))']
+              scale: [1, 1.02, 1],
+              filter: [
+                'drop-shadow(0 0 30px rgba(56,189,248,0.3))', 
+                'drop-shadow(0 0 60px rgba(56,189,248,0.6))', 
+                'drop-shadow(0 0 30px rgba(56,189,248,0.3))'
+              ]
             }}
-            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-            style={{ position: 'relative', zIndex: 2 }}
+            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ position: 'relative', zIndex: 6 }}
           >
             <img 
               src="/logo.png.png" 
               alt="SkillBridge Logo" 
-              style={{ width: 180, height: 'auto', display: 'block' }} 
+              style={{ 
+                width: 'clamp(280px, 45vw, 520px)', 
+                height: 'auto', 
+                display: 'block' 
+              }} 
             />
           </motion.div>
           
-          {/* Light Sweep Effect Overlay */}
+          {/* Futuristic Light Scanline Wave */}
           <motion.div
-            initial={{ x: '-150%', opacity: 0 }}
-            animate={{ x: '150%', opacity: [0, 1, 0] }}
-            transition={{ duration: 2.5, repeat: Infinity, repeatDelay: 1, ease: 'easeInOut' }}
+            initial={{ top: '-20%', opacity: 0 }}
+            animate={{ top: '120%', opacity: [0, 0.5, 0] }}
+            transition={{ duration: 3, repeat: Infinity, repeatDelay: 0.5, ease: 'linear' }}
             style={{
               position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
-              transform: 'skewX(-25deg)',
-              zIndex: 3,
+              left: '-10%',
+              width: '120%',
+              height: '2px',
+              background: 'linear-gradient(90deg, transparent, var(--accent-1), transparent)',
+              boxShadow: '0 0 20px var(--accent-1)',
+              zIndex: 7,
               pointerEvents: 'none'
             }}
           />
         </div>
 
-        {/* Cinematic Particles / Lens Flare */}
+        {/* Logo Shadow/Glow Base */}
         <motion.div 
-          animate={{ 
-            opacity: [0.1, 0.3, 0.1],
-            rotate: [0, 360]
+          animate={{ opacity: [0.1, 0.2, 0.1], scale: [1, 1.2, 1] }}
+          transition={{ duration: 4, repeat: Infinity }}
+          style={{ 
+            position: 'absolute', 
+            top: '50%', left: '50%', 
+            transform: 'translate(-50%, -50%)', 
+            width: 'clamp(300px, 50vw, 600px)', 
+            height: 'clamp(300px, 50vw, 600px)', 
+            background: 'radial-gradient(circle, rgba(56,189,248,0.2) 0%, transparent 70%)', 
+            zIndex: 4 
           }}
-          transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
-          style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 600, height: 600, background: 'radial-gradient(circle, rgba(56,189,248,0.05) 0%, transparent 70%)', zIndex: -1 }}
         />
       </motion.div>
+
+      {/* Finishing Touch: Particle Field */}
+      <div style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none' }}>
+        {[...Array(15)].map((_, i) => (
+          <motion.div
+            key={i}
+            animate={{ 
+              y: [-10, 10, -10],
+              opacity: [0.2, 0.5, 0.2],
+            }}
+            transition={{ 
+              duration: 3 + Math.random() * 4, 
+              repeat: Infinity,
+              delay: Math.random() * 2 
+            }}
+            style={{ 
+              position: 'absolute',
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              width: 2 + Math.random() * 3,
+              height: 2 + Math.random() * 3,
+              background: i % 2 === 0 ? 'var(--accent-1)' : 'var(--accent-2)',
+              borderRadius: '50%',
+              filter: 'blur(1px)'
+            }}
+          />
+        ))}
+      </div>
     </motion.div>
   );
 }
