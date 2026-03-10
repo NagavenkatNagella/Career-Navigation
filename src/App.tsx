@@ -323,121 +323,125 @@ function SplashScreen() {
           }}
         />
 
-        {/* Center Logo with Hex-Core HUD Frame */}
-        <div style={{ position: 'relative', width: 'fit-content', margin: '0 auto', padding: 'clamp(40px, 8vw, 80px)' }}>
-          {/* Unique Hexagonal Frame Architecture */}
+        {/* Center Logo with Quantum Singularity Frame */}
+        <div style={{ position: 'relative', width: 'fit-content', margin: '0 auto', padding: 'clamp(50px, 10vw, 100px)' }}>
+          {/* Hyper-Space Horizon (Deep Background) */}
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            
-            {/* Outer Hexagon (Rotating) */}
+            {/* The Singularity Pulse (Fractal Light) */}
             <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
-              style={{
-                position: 'absolute',
-                width: '115%',
-                height: '115%',
-                border: '1px solid rgba(56,189,248,0.15)',
-                clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)',
-                zIndex: -2
+              animate={{ 
+                scale: [1, 1.15, 0.95, 1],
+                rotate: [0, 90, 180, 360],
+                borderRadius: ["30% 70% 70% 30% / 30% 30% 70% 70%", "50% 50% 20% 80% / 25% 80% 20% 75%", "30% 70% 70% 30% / 30% 30% 70% 70%"]
               }}
-            />
-
-            {/* Inner Hexagon (Inverse Rotation & Pulse) */}
-            <motion.div
-              animate={{ rotate: -360, scale: [1, 1.03, 1] }}
-              transition={{ rotate: { duration: 25, repeat: Infinity, ease: 'linear' }, scale: { duration: 4, repeat: Infinity, ease: 'easeInOut' } }}
-              style={{
-                position: 'absolute',
-                width: '105%',
-                height: '105%',
-                border: '2px dashed rgba(124,58,237,0.2)',
-                clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)',
-                zIndex: -1
-              }}
-            />
-
-            {/* Geometric Corner Shards */}
-            {[0, 60, 120, 180, 240, 300].map((angle) => (
-              <motion.div
-                key={angle}
-                initial={{ opacity: 0, scale: 0.5 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 1, delay: 0.5 + angle / 600 }}
-                style={{
-                  position: 'absolute',
-                  width: 'clamp(20px, 5vw, 40px)',
-                  height: 'clamp(2px, 0.5vw, 4px)',
-                  background: 'var(--accent-1)',
-                  boxShadow: '0 0 15px var(--accent-1)',
-                  transform: `rotate(${angle}deg) translate(clamp(140px, 22vw, 280px))`,
-                  borderRadius: 2
-                }}
-              />
-            ))}
-
-            {/* Perimeter Light Streak (Circular Path) */}
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+              transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
               style={{
                 position: 'absolute',
                 width: '130%',
                 height: '130%',
-                zIndex: 1
+                background: 'radial-gradient(circle, rgba(56,189,248,0.1) 0%, transparent 70%)',
+                border: '1px solid rgba(56,189,248,0.2)',
+                zIndex: -3,
+                filter: 'blur(20px)'
               }}
-            >
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '-2px',
-                width: '4px',
-                height: '60px',
-                background: 'linear-gradient(to bottom, transparent, var(--accent-1), transparent)',
-                filter: 'drop-shadow(0 0 10px var(--accent-1))',
-              }} />
-            </motion.div>
+            />
+
+            {/* Orbital Conduits (Proprietary Motion) */}
+            {[...Array(3)].map((_, i) => (
+              <motion.div
+                key={i}
+                animate={{ 
+                  rotate: i % 2 === 0 ? 360 : -360,
+                  scale: [1, 1.05, 1]
+                }}
+                transition={{ 
+                  rotate: { duration: 15 + i * 5, repeat: Infinity, ease: "linear" },
+                  scale: { duration: 3, repeat: Infinity, ease: "easeInOut", delay: i }
+                }}
+                style={{
+                  position: 'absolute',
+                  width: `${110 + i * 15}%`,
+                  height: `${110 + i * 15}%`,
+                  border: `1px solid rgba(124,58,237,${0.15 - i * 0.04})`,
+                  borderRadius: i % 2 === 0 ? '42% 58% 50% 50% / 45% 45% 55% 55%' : '60% 40% 30% 70% / 60% 30% 70% 40%',
+                  zIndex: -2,
+                }}
+              >
+                {/* Traveling Data Node */}
+                <motion.div
+                  animate={{ offsetDistance: ["0%", "100%"] }}
+                  transition={{ duration: 4 + i, repeat: Infinity, ease: "linear" }}
+                  style={{
+                    position: 'absolute',
+                    width: 6, height: 6,
+                    background: 'var(--accent-1)',
+                    boxShadow: '0 0 15px var(--accent-1)',
+                    borderRadius: '50%',
+                    offsetPath: `path('M 50 0 A 50 50 0 1 1 50 100 A 50 50 0 1 1 50 0')`, // Placeholder path logic
+                    top: '-3px',
+                    left: '50%'
+                  }}
+                />
+              </motion.div>
+            ))}
+
+            {/* Geometric Singularity Shards */}
+            {[...Array(12)].map((_, i) => (
+              <motion.div
+                key={i}
+                animate={{ 
+                  opacity: [0.2, 0.6, 0.2],
+                  height: [20, 40, 20]
+                }}
+                transition={{ duration: 2, repeat: Infinity, delay: i * 0.15 }}
+                style={{
+                  position: 'absolute',
+                  width: 2,
+                  background: `linear-gradient(to top, transparent, ${i % 2 === 0 ? 'var(--accent-1)' : 'var(--accent-2)'}, transparent)`,
+                  transform: `rotate(${i * 30}deg) translateY(clamp(-220px, -30vw, -140px))`,
+                  zIndex: 2
+                }}
+              />
+            ))}
           </div>
 
-          {/* Logo Content */}
+          {/* Core Content (Logo) */}
           <motion.div
             animate={{ 
-              scale: [1, 1.02, 1],
+              y: [0, -8, 0],
+              scale: [1, 1.01, 1],
               filter: [
-                'drop-shadow(0 0 30px rgba(56,189,248,0.3))', 
-                'drop-shadow(0 0 60px rgba(56,189,248,0.6))', 
-                'drop-shadow(0 0 30px rgba(56,189,248,0.3))'
+                'drop-shadow(0 0 30px rgba(56,189,248,0.4))', 
+                'drop-shadow(0 0 70px rgba(56,189,248,0.7))', 
+                'drop-shadow(0 0 30px rgba(56,189,248,0.4))'
               ]
             }}
-            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
             style={{ position: 'relative', zIndex: 6 }}
           >
             <img 
               src="/logo.png" 
               alt="SkillBridge Logo" 
               style={{ 
-                width: 'clamp(240px, 35vw, 440px)', 
+                width: 'clamp(220px, 32vw, 420px)', 
                 height: 'auto', 
-                display: 'block' 
+                display: 'block',
+                filter: 'contrast(1.1) brightness(1.1)'
               }} 
             />
           </motion.div>
-          
-          {/* Futuristic Light Scanline Wave */}
-          <motion.div
-            initial={{ top: '-20%', opacity: 0 }}
-            animate={{ top: '120%', opacity: [0, 0.5, 0] }}
-            transition={{ duration: 3, repeat: Infinity, repeatDelay: 0.5, ease: 'linear' }}
-            style={{
-              position: 'absolute',
-              left: '-10%',
-              width: '120%',
-              height: '2px',
-              background: 'linear-gradient(90deg, transparent, var(--accent-1), transparent)',
-              boxShadow: '0 0 20px var(--accent-1)',
-              zIndex: 7,
-              pointerEvents: 'none'
-            }}
-          />
+
+          {/* Hyper-Aura Glow */}
+          <div style={{
+            position: 'absolute',
+            top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '100%',
+            height: '100%',
+            background: 'radial-gradient(circle, rgba(56,189,248,0.15) 0%, transparent 60%)',
+            zIndex: -1,
+            pointerEvents: 'none'
+          }} />
         </div>
 
         {/* Animated Quotation */}
