@@ -338,7 +338,7 @@ function SplashScreen() {
             style={{ position: 'relative', zIndex: 6 }}
           >
             <img 
-              src="/logo.png.png" 
+              src="/logo.png" 
               alt="SkillBridge Logo" 
               style={{ 
                 width: 'clamp(280px, 45vw, 520px)', 
