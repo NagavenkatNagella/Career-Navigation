@@ -22,7 +22,7 @@ import {
   onAuthStateChanged,
   signInWithPopup
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, query, getDocs, where } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, getDocs, where, updateDoc, arrayUnion, onSnapshot, addDoc } from 'firebase/firestore';
 
 // ─── Motion Variants ─────────────────────────────────────────
 const fadeUp: Variants = {
@@ -363,14 +363,19 @@ export default function App() {
                   {(role === 'mentor'
                     ? [
                       { id: 'mentor-stats', icon: <TrendingUp size={15} />, label: 'Analytics' },
-                      { id: 'mentor-users', icon: <Users size={15} />, label: 'User Progress' },
+                      { id: 'mentor-users', icon: <Users size={15} />, label: 'Cohorts' },
+                      { id: 'chat', icon: <Briefcase size={15} />, label: 'Messages' },
+                      { id: 'resources-hub', icon: <BookOpen size={15} />, label: 'Hub' },
+                      { id: 'communities', icon: <Globe size={15} />, label: 'Communities' },
                       { id: 'profile', icon: <User size={15} />, label: 'Profile' }
                     ]
                     : [
-                      { id: 'dashboard', icon: <Target size={15} />, label: 'Dashboard' },
+                      { id: 'dashboard', icon: <Target size={15} />, label: 'Home' },
                       { id: 'path', icon: <Map size={15} />, label: 'Roadmap' },
-                      { id: 'recommendations', icon: <BookOpen size={15} />, label: 'Resources' },
+                      { id: 'recommendations', icon: <Zap size={15} />, label: 'Resources' },
                       { id: 'mentors', icon: <Users size={15} />, label: 'Mentors' },
+                      { id: 'chat', icon: <Briefcase size={15} />, label: 'Chat' },
+                      { id: 'communities', icon: <Globe size={15} />, label: 'Groups' },
                       { id: 'profile', icon: <User size={15} />, label: 'Profile' }
                     ]).map(t => (
                       <button key={t.id} className={`nav-tab ${activeTab === t.id ? 'active' : ''}`} onClick={() => setActiveTab(t.id)}>
@@ -419,10 +424,10 @@ export default function App() {
                 {mobileMenu && (
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden', borderTop: '1px solid var(--border-subtle)', padding: '0.75rem', background: 'rgba(2,8,23,0.95)' }}>
                     {(role === 'mentor'
-                      ? ['mentor-stats', 'mentor-users', 'profile']
-                      : ['dashboard', 'path', 'recommendations', 'mentors', 'profile']).map(t => (
+                      ? ['mentor-stats', 'mentor-users', 'chat', 'resources-hub', 'communities', 'profile']
+                      : ['dashboard', 'path', 'recommendations', 'mentors', 'chat', 'communities', 'profile']).map(t => (
                         <button key={t} onClick={() => { setActiveTab(t); setMobileMenu(false); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.75rem 1rem', borderRadius: 12, fontWeight: 600, color: activeTab === t ? 'var(--accent-1)' : 'var(--text-muted)', background: activeTab === t ? 'rgba(56,189,248,0.1)' : 'transparent', marginBottom: 4 }}>
-                          {t.replace('mentor-', '').charAt(0).toUpperCase() + t.replace('mentor-', '').slice(1)}
+                          {t.replace('mentor-', '').replace('resources-hub', 'Resources').replace('communities', 'Groups').charAt(0).toUpperCase() + t.replace('mentor-', '').replace('resources-hub', 'Resources').replace('communities', 'Groups').slice(1)}
                         </button>
                       ))}
                   </motion.div>
@@ -440,6 +445,9 @@ export default function App() {
                 {activeTab === 'profile' && <ProfileTab key="prof" user={user} setUser={setUser} />}
                 {activeTab === 'mentor-stats' && <MentorDashboard key="mstats" />}
                 {activeTab === 'mentor-users' && <MentorUserManagement key="musers" />}
+                {activeTab === 'chat' && <ChatTab key="chat" user={user} role={role} />}
+                {activeTab === 'resources-hub' && <ResourcesHub key="rhub" user={user} role={role} />}
+                {activeTab === 'communities' && <CommunitiesTab key="comm" user={user} role={role} />}
               </AnimatePresence>
             </main>
           </motion.div>
@@ -1940,12 +1948,39 @@ function MentorDashboard() {
     fetchRequests();
   }, []);
 
-  const handleRequestAction = async (requestId: string, action: 'accepted' | 'rejected') => {
+  const handleRequestAction = async (requestId: string, learnerId: string, action: 'accepted' | 'rejected') => {
     try {
-      await setDoc(doc(db, 'mentorshipRequests', requestId), { 
+      if (!auth.currentUser) return;
+      
+      const updateObj: any = { 
         status: action,
         updatedAt: new Date().toISOString()
-      }, { merge: true });
+      };
+      
+      await updateDoc(doc(db, 'mentorshipRequests', requestId), updateObj);
+
+      if (action === 'accepted') {
+        // Update Mentor document with Mentees
+        await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+          mentees: arrayUnion(learnerId)
+        });
+        
+        // Update Learner document with Mentor
+        await updateDoc(doc(db, 'users', learnerId), {
+          mentors: arrayUnion(auth.currentUser.uid)
+        });
+
+        // Initialize a shared chat session
+        const chatRoomId = [auth.currentUser.uid, learnerId].sort().join('_');
+        await setDoc(doc(db, 'chats', chatRoomId), {
+          participants: [auth.currentUser.uid, learnerId],
+          lastMessage: 'Mentorship started!',
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+        
+        alert("Mentorship established! You can now chat and share resources.");
+      }
+      
       setRequests(prev => prev.filter(r => r.id !== requestId));
     } catch (err) {
       console.error("Error updating request:", err);
@@ -2012,14 +2047,14 @@ function MentorDashboard() {
                     <button 
                       className="btn btn-ghost" 
                       style={{ flex: 1, padding: '0.5rem', fontSize: '0.8rem', background: 'rgba(16,185,129,0.1)', color: '#10b981' }}
-                      onClick={() => handleRequestAction(req.id, 'accepted')}
+                      onClick={() => handleRequestAction(req.id, req.learnerId, 'accepted')}
                     >
                       Accept
                     </button>
                     <button 
                       className="btn btn-ghost" 
                       style={{ flex: 1, padding: '0.5rem', fontSize: '0.8rem', background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}
-                      onClick={() => handleRequestAction(req.id, 'rejected')}
+                      onClick={() => handleRequestAction(req.id, req.learnerId, 'rejected')}
                     >
                       Reject
                     </button>
@@ -2221,6 +2256,7 @@ function ProfileTab({ user, setUser }: { user: UserProfile; setUser: React.Dispa
 
 function MentorUserManagement() {
   const [users, setUsers] = useState<any[]>([]);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -2277,13 +2313,418 @@ function MentorUserManagement() {
                   </div>
                 </td>
                 <td style={{ padding: '1.25rem', textAlign: 'right' }}>
-                  <button className="btn btn-ghost" style={{ fontSize: '0.75rem' }}>View Analytics</button>
+                  <button onClick={() => setSelectedUser(u)} className="btn btn-ghost" style={{ fontSize: '0.75rem' }}>Review Details</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {selectedUser && (
+        <motion.div initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} className="card-premium" style={{ marginTop:'2rem', padding:'2.5rem' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'2.5rem' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:'1.5rem' }}>
+              <div style={{ width:64, height:64, borderRadius:20, background:'var(--accent-1)', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.5rem', fontWeight:900 }}>{selectedUser.name?.[0] || selectedUser.email?.[0]}</div>
+              <div>
+                <h3 style={{ fontWeight:800, fontSize:'1.5rem', marginBottom:'0.25rem' }}>{selectedUser.name || 'Anonymous User'}</h3>
+                <p style={{ color:'var(--text-muted)', fontSize:'0.9rem' }}>Target: {selectedUser.goal ? CAREER_PATHS[selectedUser.goal as CareerPathType].label : 'General Development'}</p>
+              </div>
+            </div>
+            <button className="btn btn-ghost" onClick={() => setSelectedUser(null)}>Close Overview</button>
+          </div>
+
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(300px, 1fr))', gap:'2rem' }}>
+            <div>
+              <h4 style={{ fontWeight:800, marginBottom:'1.5rem', fontSize:'1.1rem' }}>Skill Proficiency</h4>
+              <div style={{ height:300 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart cx="50%" cy="50%" outerRadius="80%" data={Object.entries(selectedUser.skills || {}).map(([name, value]) => ({ name, value }))}>
+                    <PolarGrid stroke="rgba(255,255,255,0.1)" />
+                    <PolarAngleAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} />
+                    <Radar dataKey="value" stroke="var(--accent-1)" fill="var(--accent-1)" fillOpacity={0.3} />
+                    <Tooltip contentStyle={{ background:'var(--bg-card)', border:'1px solid var(--border-subtle)', borderRadius:12 }} />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div>
+              <h4 style={{ fontWeight:800, marginBottom:'1.5rem', fontSize:'1.1rem' }}>Development Bio</h4>
+              <div style={{ background:'rgba(255,255,255,0.03)', padding:'1.5rem', borderRadius:16, border:'1px solid var(--border-subtle)', marginBottom:'1.5rem' }}>
+                <p style={{ fontSize:'0.9rem', lineHeight:1.6, color:'var(--text-muted)' }}>{selectedUser.bio || "This learner hasn't provided a bio yet, but is actively making progress on their designated roadmap."}</p>
+              </div>
+              <div className="card-premium" style={{ padding:'1.5rem', background:'rgba(16,185,129,0.05)', border:'1px solid rgba(16,185,129,0.1)' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', color:'#10b981', fontWeight:800, fontSize:'0.9rem', marginBottom:'0.5rem' }}>
+                  <TrendingUp size={18}/> Performance Insight
+                </div>
+                <p style={{ fontSize:'0.85rem' }}>Learner shows strong aptitude in {Object.entries(selectedUser.skills || { 'Fundamentals': 10 }).sort((a:any, b:any) => b[1]-a[1])[0]?.[0]}. Recommend focusing on practical projects.</p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
     </motion.div>
   );
 }
+
+// ═══════════════════════════════════════════════════════════════
+// CHAT & MESSAGING
+// ═══════════════════════════════════════════════════════════════
+function ChatTab({ user, role }: { user: UserProfile, role: 'user' | 'mentor' }) {
+  const [peers, setPeers] = useState<any[]>([]);
+  const [selectedPeer, setSelectedPeer] = useState<any>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  // Fetch connected peers
+  useEffect(() => {
+    const fetchPeers = async () => {
+      if (!auth.currentUser) return;
+      try {
+        const peerIds = role === 'mentor' ? (user.mentees || []) : (user.mentors || []);
+        if (peerIds.length === 0) {
+          setLoading(false);
+          return;
+        }
+        
+        const q = query(collection(db, 'users'), where('__name__', 'in', peerIds));
+        const snapshot = await getDocs(q);
+        setPeers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (err) {
+        console.error("Error fetching chat peers:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPeers();
+  }, [user, role]);
+
+  // Real-time message listener
+  useEffect(() => {
+    if (!selectedPeer || !auth.currentUser) return;
+    const roomId = [auth.currentUser.uid, selectedPeer.id].sort().join('_');
+    const q = query(collection(db, `chats/${roomId}/messages`), where('timestamp', '!=', null));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      setMessages(msgs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()));
+    });
+    return () => unsubscribe();
+  }, [selectedPeer]);
+
+  const sendMessage = async () => {
+    if (!input.trim() || !selectedPeer || !auth.currentUser) return;
+    const roomId = [auth.currentUser.uid, selectedPeer.id].sort().join('_');
+    
+    try {
+      const msgData = {
+        senderId: auth.currentUser.uid,
+        text: input,
+        timestamp: new Date().toISOString()
+      };
+      
+      await addDoc(collection(db, `chats/${roomId}/messages`), msgData);
+      await updateDoc(doc(db, 'chats', roomId), {
+        lastMessage: input,
+        updatedAt: new Date().toISOString()
+      });
+      setInput('');
+    } catch (err) {
+      console.error("Chat send error:", err);
+    }
+  };
+
+  if (loading) return <div style={{ display:'flex', justifyContent:'center', padding:'4rem' }}><RefreshCw className="animate-spin" size={32} color="var(--accent-1)" /></div>;
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '1.5rem', height: 'calc(100vh - 200px)' }}>
+      {/* Sidebar */}
+      <div className="card-premium" style={{ padding:0, overflow:'hidden', display:'flex', flexDirection:'column' }}>
+        <div style={{ padding:'1.5rem', borderBottom:'1px solid var(--border-subtle)' }}>
+          <h3 style={{ fontWeight:800, fontSize:'1.1rem' }}>Messages</h3>
+        </div>
+        <div style={{ flex:1, overflowY:'auto' }}>
+          {peers.length === 0 ? (
+            <div style={{ padding:'2rem', textAlign:'center', color:'var(--text-muted)', fontSize:'0.85rem' }}>No connections yet. Establish mentorship to start chatting.</div>
+          ) : peers.map(p => (
+            <div 
+              key={p.id} 
+              onClick={() => setSelectedPeer(p)}
+              style={{ 
+                padding:'1rem 1.5rem', cursor:'pointer', 
+                background: selectedPeer?.id === p.id ? 'rgba(56,189,248,0.1)' : 'transparent',
+                borderLeft: selectedPeer?.id === p.id ? '4px solid var(--accent-1)' : '4px solid transparent',
+                transition:'0.2s'
+              }}
+            >
+              <div style={{ fontWeight:700 }}>{p.name}</div>
+              <div style={{ fontSize:'0.75rem', color:'var(--text-muted)' }}>{p.education || 'Expert'}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Chat Window */}
+      <div className="card-premium" style={{ padding:0, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        {selectedPeer ? (
+          <>
+            <div style={{ padding:'1.25rem 1.5rem', borderBottom:'1px solid var(--border-subtle)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
+                <div style={{ width:32, height:32, borderRadius:8, background:'var(--accent-1)', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800 }}>{selectedPeer.name[0]}</div>
+                <span style={{ fontWeight:800 }}>{selectedPeer.name}</span>
+              </div>
+              <span className="badge badge-green" style={{ fontSize:'0.65rem' }}>Active Session</span>
+            </div>
+            <div style={{ flex:1, padding:'1.5rem', overflowY:'auto', display:'flex', flexDirection:'column', gap:'1rem' }}>
+              {messages.map(m => (
+                <div key={m.id} style={{ 
+                  alignSelf: m.senderId === auth.currentUser?.uid ? 'flex-end' : 'flex-start',
+                  maxWidth:'70%', padding:'0.75rem 1rem', borderRadius:16,
+                  background: m.senderId === auth.currentUser?.uid ? 'var(--accent-1)' : 'rgba(255,255,255,0.05)',
+                  color: m.senderId === auth.currentUser?.uid ? '#fff' : 'inherit',
+                  boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
+                }}>
+                  <div style={{ fontSize:'0.9rem' }}>{m.text}</div>
+                  <div style={{ fontSize:'0.6rem', opacity:0.6, marginTop:'0.25rem', textAlign:'right' }}>{new Date(m.timestamp).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</div>
+                </div>
+              ))}
+              {messages.length === 0 && <div style={{ textAlign:'center', margin:'auto', color:'var(--text-muted)' }}>Send a message to start the conversation!</div>}
+            </div>
+            <div style={{ padding:'1rem 1.5rem', borderTop:'1px solid var(--border-subtle)', display:'flex', gap:'0.75rem' }}>
+              <input 
+                className="input-field" 
+                placeholder="Type a message..." 
+                value={input} 
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && sendMessage()}
+              />
+              <button className="btn btn-primary" onClick={sendMessage} style={{ borderRadius:12 }}>Send</button>
+            </div>
+          </>
+        ) : (
+          <div style={{ margin:'auto', textAlign:'center', padding:'4rem' }}>
+            <Briefcase size={48} style={{ opacity:0.1, marginBottom:'1.5rem' }} />
+            <h3 style={{ fontWeight:800 }}>Select a Conversation</h3>
+            <p style={{ color:'var(--text-muted)', maxWidth:300 }}>Connect with your professional network to start real-time mentorship guidance.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RESOURCES HUB
+// ═══════════════════════════════════════════════════════════════
+function ResourcesHub({ user, role }: { user: UserProfile, role: 'user' | 'mentor' }) {
+  const [resources, setResources] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newRes, setNewRes] = useState({ title: '', url: '', type: 'link' as any, description: '' });
+
+  useEffect(() => {
+    const fetchResources = async () => {
+      try {
+        const q = role === 'mentor' 
+          ? query(collection(db, 'resources'), where('addedBy', '==', auth.currentUser?.uid))
+          : query(collection(db, 'resources'), where('category', '==', user.goal));
+        const snapshot = await getDocs(q);
+        setResources(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (err) {
+        console.error("Resource fetch failed:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchResources();
+  }, [user.goal, role]);
+
+  const handleAdd = async () => {
+    if (!newRes.title || !newRes.url) return;
+    try {
+      const data = {
+        ...newRes,
+        addedBy: auth.currentUser?.uid,
+        category: user.goal,
+        timestamp: new Date().toISOString()
+      };
+      const docRef = await addDoc(collection(db, 'resources'), data);
+      setResources([{ id: docRef.id, ...data }, ...resources]);
+      setShowAdd(false);
+      setNewRes({ title: '', url: '', type: 'link', description: '' });
+    } catch (err) {
+      console.error("Error adding resource:", err);
+    }
+  };
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:'2rem' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <div>
+          <h2 style={{ fontFamily:'var(--font-display)', fontSize:'2rem', fontWeight:900 }}>Resource Library</h2>
+          <p style={{ color:'var(--text-muted)' }}>{role === 'mentor' ? 'Curate and distribute learning materials to your cohort.' : 'Explore expert-curated materials tailored to your path.'}</p>
+        </div>
+        {role === 'mentor' && (
+          <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add Material</button>
+        )}
+      </div>
+
+      {showAdd && (
+        <motion.div initial={{ opacity:0, scale:0.95 }} animate={{ opacity:1, scale:1 }} className="card-premium" style={{ padding:'2rem', border:'1px solid var(--accent-1)' }}>
+          <h3 style={{ fontWeight:800, marginBottom:'1.5rem' }}>Upload New Material</h3>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1.5rem', marginBottom:'1.5rem' }}>
+            <div className="input-wrap">
+              <label className="input-label">Title</label>
+              <input className="input-field" value={newRes.title} onChange={e => setNewRes({...newRes, title: e.target.value})} placeholder="e.g. Advanced System Design PDF" />
+            </div>
+            <div className="input-wrap">
+              <label className="input-label">Resource URL / Link</label>
+              <input className="input-field" value={newRes.url} onChange={e => setNewRes({...newRes, url: e.target.value})} placeholder="https://..." />
+            </div>
+          </div>
+          <div style={{ display:'flex', gap:'1rem', marginBottom:'1.5rem' }}>
+            {(['link', 'video', 'pdf', 'note'] as const).map(t => (
+              <button key={t} onClick={() => setNewRes({...newRes, type: t})} className={`tab-btn ${newRes.type === t ? 'active' : ''}`} style={{ textTransform:'capitalize', padding:'0.5rem 1.5rem' }}>{t}</button>
+            ))}
+          </div>
+          <div style={{ display:'flex', justifyContent:'flex-end', gap:'1rem' }}>
+            <button className="btn btn-ghost" onClick={() => setShowAdd(false)}>Cancel</button>
+            <button className="btn btn-primary" onClick={handleAdd}>Publish to Cohort</button>
+          </div>
+        </motion.div>
+      )}
+
+      {loading ? <div style={{ textAlign:'center', padding:'4rem' }}><RefreshCw className="animate-spin" size={32} /></div> : (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(350px, 1fr))', gap:'1.5rem' }}>
+          {resources.map((r, i) => (
+            <motion.div key={r.id} initial={{ opacity:0, y:20 }} animate={{ opacity:1, y:0 }} transition={{ delay: i*0.05 }} className="card-premium" style={{ padding:'1.5rem' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'1.25rem' }}>
+                <div style={{ width:44, height:44, borderRadius:12, background:'rgba(255,255,255,0.05)', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--accent-1)' }}>
+                  {r.type === 'video' ? <Zap size={20}/> : r.type === 'pdf' ? <Award size={20}/> : <Globe size={20}/>}
+                </div>
+                <span className="badge badge-purple" style={{ textTransform:'uppercase', fontSize:'0.65rem' }}>{r.type}</span>
+              </div>
+              <h4 style={{ fontWeight:800, marginBottom:'0.5rem' }}>{r.title}</h4>
+              <p style={{ fontSize:'0.8rem', color:'var(--text-muted)', marginBottom:'1.5rem', minHeight:'3rem' }}>{r.description || 'Professional-grade material curated for industry readiness.'}</p>
+              <a href={r.url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ width:'100%', fontSize:'0.85rem' }}>Access Resource <ChevronRight size={14}/></a>
+            </motion.div>
+          ))}
+          {resources.length === 0 && <div style={{ gridColumn:'1/-1', textAlign:'center', padding:'4rem', opacity:0.3 }}>No resources found in this category.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COMMUNITIES & GROUPS
+// ═══════════════════════════════════════════════════════════════
+function CommunitiesTab({ user, role }: { user: UserProfile, role: 'user' | 'mentor' }) {
+  const [groups, setGroups] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [gName, setGName] = useState('');
+  const [gDesc, setGDesc] = useState('');
+
+  useEffect(() => {
+    const fetchGroups = async () => {
+      try {
+        const q = query(collection(db, 'groups'));
+        const snapshot = await getDocs(q);
+        setGroups(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (err) {
+        console.error("Groups fetch error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchGroups();
+  }, []);
+
+  const handleCreateGroup = async () => {
+    if (!gName || !gDesc) return;
+    try {
+      const data = {
+        name: gName,
+        description: gDesc,
+        mentorId: auth.currentUser?.uid,
+        mentorName: user.name,
+        members: [auth.currentUser?.uid],
+        createdAt: new Date().toISOString()
+      };
+      const docRef = await addDoc(collection(db, 'groups'), data);
+      setGroups([{ id: docRef.id, ...data }, ...groups]);
+      setShowCreate(false);
+      setGName(''); setGDesc('');
+    } catch (err) {
+      console.error("Group creation failed:", err);
+    }
+  };
+
+  const joinGroup = async (groupId: string) => {
+    if (!auth.currentUser) return;
+    try {
+      await updateDoc(doc(db, 'groups', groupId), {
+        members: arrayUnion(auth.currentUser.uid)
+      });
+      alert("Success! You've joined the community.");
+    } catch (err) {
+      console.error("Join failed:", err);
+    }
+  };
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:'2rem' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <div>
+          <h2 style={{ fontFamily:'var(--font-display)', fontSize:'2rem', fontWeight:900 }}>Global Communities</h2>
+          <p style={{ color:'var(--text-muted)' }}>Collaborate with peers and experts in specialized learning groups.</p>
+        </div>
+        {role === 'mentor' && <button className="btn btn-primary" onClick={() => setShowCreate(true)}>Create Community</button>}
+      </div>
+
+      {showCreate && (
+        <div className="card-premium" style={{ padding:'2rem' }}>
+          <h3 style={{ fontWeight:800, marginBottom:'1.5rem' }}>New Group Details</h3>
+          <div className="input-wrap" style={{ marginBottom:'1rem' }}>
+            <label className="input-label">Community Name</label>
+            <input className="input-field" value={gName} onChange={e => setGName(e.target.value)} placeholder="e.g. Frontend Masters Series" />
+          </div>
+          <div className="input-wrap" style={{ marginBottom:'1.5rem' }}>
+            <label className="input-label">Description</label>
+            <textarea className="input-field" value={gDesc} onChange={e => setGDesc(e.target.value)} placeholder="What is the goal of this group?" />
+          </div>
+          <div style={{ display:'flex', justifyContent:'flex-end', gap:'1rem' }}>
+            <button className="btn btn-ghost" onClick={() => setShowCreate(false)}>Cancel</button>
+            <button className="btn btn-primary" onClick={handleCreateGroup}>Establish Community</button>
+          </div>
+        </div>
+      )}
+
+      {loading ? <div style={{ textAlign:'center', padding:'4rem' }}><RefreshCw className="animate-spin" /></div> : (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))', gap:'2rem' }}>
+          {groups.map(g => (
+            <div key={g.id} className="card-premium" style={{ padding:'2rem', display:'flex', flexDirection:'column' }}>
+              <div style={{ width:48, height:48, borderRadius:14, background:'linear-gradient(135deg,#7c3aed,#ec4899)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', marginBottom:'1.5rem' }}>
+                <Globe size={24} />
+              </div>
+              <h3 style={{ fontWeight:800, marginBottom:'0.5rem' }}>{g.name}</h3>
+              <p style={{ fontSize:'0.85rem', color:'var(--text-muted)', marginBottom:'1.5rem', flex:1 }}>{g.description}</p>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
+                  <Users size={14} color="var(--accent-1)" />
+                  <span style={{ fontSize:'0.75rem', fontWeight:700 }}>{g.members?.length || 0} Members</span>
+                </div>
+                {!g.members?.includes(auth.currentUser?.uid) && (
+                  <button className="btn btn-ghost" onClick={() => joinGroup(g.id)} style={{ fontSize:'0.8rem' }}>Join</button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
