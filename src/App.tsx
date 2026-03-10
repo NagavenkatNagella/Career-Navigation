@@ -57,7 +57,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mounted, setMounted] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
-  const [view, setView] = useState<'onboarding' | 'assessment' | 'main'>('onboarding');
+  const [view, setView] = useState<'login' | 'onboarding' | 'assessment' | 'main'>('login');
 
   // User State
   const [user, setUser] = useState<UserProfile>({
@@ -111,19 +111,110 @@ function App() {
   const SplashView = () => (
     <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-dark)', overflow: 'hidden', position: 'fixed', inset: 0, zIndex: 10000 }}>
       <div className="bg-mesh"></div>
-      <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 1 }} style={{ textAlign: 'center' }}>
+      <div className="bg-noise"></div>
+      <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }} style={{ textAlign: 'center' }}>
         <motion.div
-          animate={{ rotate: 360, boxShadow: ['0 0 20px var(--accent-glow)', '0 0 50px var(--accent-glow)', '0 0 20px var(--accent-glow)'] }}
-          transition={{ rotate: { duration: 20, repeat: Infinity, ease: 'linear' }, boxShadow: { duration: 3, repeat: Infinity } }}
-          style={{ width: '120px', height: '120px', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))', borderRadius: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 2rem' }}
+          animate={{ 
+            rotate: [0, 360],
+            boxShadow: ['0 0 40px var(--accent-glow)', '0 0 80px var(--accent-glow)', '0 0 40px var(--accent-glow)'],
+            scale: [1, 1.1, 1]
+          }}
+          transition={{ 
+            rotate: { duration: 15, repeat: Infinity, ease: 'linear' }, 
+            boxShadow: { duration: 3, repeat: Infinity, ease: 'easeInOut' },
+            scale: { duration: 4, repeat: Infinity, ease: 'easeInOut' }
+          }}
+          style={{ width: '160px', height: '160px', background: 'var(--grad-primary)', borderRadius: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 3rem', position: 'relative' }}
         >
-          <BrainCircuit size={64} color="white" />
+          <div style={{ position: 'absolute', inset: '-10px', background: 'var(--grad-primary)', borderRadius: '54px', filter: 'blur(15px)', opacity: 0.3 }}></div>
+          <BrainCircuit size={80} color="white" />
         </motion.div>
-        <h1 style={{ fontSize: '3.5rem', fontWeight: 800, background: 'linear-gradient(to bottom, #fff, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>SkillBridge AI</h1>
-        <p className="text-muted mt-2" style={{ letterSpacing: '4px', textTransform: 'uppercase', fontSize: '0.9rem' }}>Align Your Aspiration</p>
+        <h1 style={{ fontSize: '4.5rem', fontWeight: 900, letterSpacing: '-0.05em', background: 'linear-gradient(to bottom, #fff, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: '1rem' }}>SkillBridge AI</h1>
+        <div style={{ overflow: 'hidden' }}>
+          <motion.p 
+            initial={{ y: '100%' }} 
+            animate={{ y: 0 }} 
+            transition={{ delay: 0.5, duration: 0.8 }}
+            className="text-muted" 
+            style={{ letterSpacing: '8px', textTransform: 'uppercase', fontSize: '1rem', fontWeight: 600 }}
+          >
+            Bridge the Industry Gap
+          </motion.p>
+        </div>
+        <div style={{ width: '200px', height: '2px', background: 'rgba(255,255,255,0.1)', margin: '2rem auto', borderRadius: '1px', overflow: 'hidden' }}>
+          <motion.div 
+            initial={{ x: '-100%' }}
+            animate={{ x: '100%' }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ width: '100%', height: '100%', background: 'var(--accent-primary)' }}
+          />
+        </div>
       </motion.div>
     </div>
   );
+
+  const LoginView = () => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+
+    return (
+      <div className="container min-h-screen flex items-center justify-center p-6">
+        <motion.div initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="w-full max-w-md">
+          <div className="card glass-panel p-10 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-8 opacity-10">
+              <Zap size={120} />
+            </div>
+            <div className="flex justify-center mb-8">
+              <div className="w-16 h-16 bg-accent-primary/10 rounded-2xl flex items-center justify-center text-accent-primary">
+                <ShieldCheck size={32} />
+              </div>
+            </div>
+            <h2 className="text-3xl font-black text-center mb-2">Welcome Back</h2>
+            <p className="text-muted text-center mb-10">Sign in to continue your career journey.</p>
+            
+            <div className="space-y-6">
+              <div className="input-group">
+                <label className="input-label">Email Address</label>
+                <input 
+                  type="email" 
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@example.com" 
+                  className="input-field" 
+                />
+              </div>
+              <div className="input-group">
+                <label className="input-label">Password</label>
+                <input 
+                  type="password" 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••" 
+                  className="input-field" 
+                />
+              </div>
+              <button 
+                onClick={() => setView('onboarding')}
+                className="btn btn-primary w-full py-4 text-lg font-bold"
+              >
+                Sign In <ChevronRight size={20} />
+              </button>
+              
+              <div className="relative py-4">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10"></div></div>
+                <div className="relative flex justify-center text-xs uppercase"><span className="bg-[#0f172a] px-2 text-muted font-bold">Or continue with</span></div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <button className="btn btn-secondary py-3"><Globe size={18} /> Google</button>
+                <button className="btn btn-secondary py-3"><Users size={18} /> LinkedIn</button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  };
 
   const OnboardingView = () => {
     const [name, setName] = useState('');
@@ -275,7 +366,7 @@ function App() {
             </div>
 
             <div className="flex gap-2">
-              {['dashboard', 'path', 'recommendations'].map(tab => (
+              {['dashboard', 'path', 'recommendations', 'mentors'].map(tab => (
                 <button
                   key={tab}
                   className={`btn ${activeTab === tab ? 'btn-primary' : 'btn-icon'}`}
@@ -285,6 +376,7 @@ function App() {
                   {tab === 'dashboard' && <Target size={18} />}
                   {tab === 'path' && <Map size={18} />}
                   {tab === 'recommendations' && <BookOpen size={18} />}
+                  {tab === 'mentors' && <Users size={18} />}
                   <span className={activeTab === tab ? 'block ml-2' : 'hidden'}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
                 </button>
               ))}
@@ -372,6 +464,27 @@ function App() {
                     ))}
                   </div>
                 </div>
+
+                {/* Skill Gap Analysis */}
+                <div className="col-span-12 card glass-panel bg-grad-glow">
+                  <div className="flex items-center gap-6">
+                    <div className="p-5 bg-status-warning/10 rounded-3xl border border-status-warning/20">
+                      <AlertCircle className="text-status-warning" size={40} />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-2xl font-black mb-1">Skill Gap Analysis</h3>
+                      <p className="text-muted">We've identified <span className="text-status-warning font-bold">3 critical gaps</span> between your current profile and {CAREER_PATHS[user.goal].label} requirements.</p>
+                      <div className="flex gap-4 mt-4">
+                        {["System Design", "Cloud Native", "Advanced DS"].map(gap => (
+                          <div key={gap} className="px-4 py-2 bg-white/5 rounded-xl border border-white/10 text-xs font-bold text-main flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-status-warning"></div> {gap}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <button className="btn btn-primary" onClick={() => setActiveTab('recommendations')}>Fix Gaps Now</button>
+                  </div>
+                </div>
               </motion.div>
             )}
 
@@ -453,6 +566,35 @@ function App() {
                 </div>
               </motion.div>
             )}
+
+            {activeTab === 'mentors' && (
+              <motion.div key="mentors" variants={containerVariants} initial="hidden" animate="visible" className="space-y-8">
+                <div className="text-center mb-12">
+                  <h2 className="text-4xl font-black mb-4">Connect with Industry Experts</h2>
+                  <p className="text-muted">Personalized mentor matches based on your {CAREER_PATHS[user.goal].label} aspirations.</p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {[
+                    { name: "Sarah Chen", role: "Sr. Engineer @ Google", rating: 4.9, tags: ["System Design", "Go"] },
+                    { name: "Marcus Thorne", role: "Product Lead @ Meta", rating: 4.8, tags: ["Scale", "Leadership"] },
+                    { name: "Elena Rodriguez", role: "AI Researcher @ OpenAI", rating: 5.0, tags: ["LLMs", "PyTorch"] }
+                  ].map((mentor, i) => (
+                    <motion.div key={i} variants={itemVariants} className="card glass-panel p-8 text-center border-white/5 hover:border-accent-primary/40 transition-all">
+                      <div className="w-20 h-20 bg-accent-primary/10 rounded-full mx-auto mb-4 flex items-center justify-center text-accent-primary font-black text-2xl">
+                        {mentor.name.split(' ').map(n => n[0]).join('')}
+                      </div>
+                      <h3 className="text-xl font-bold mb-1">{mentor.name}</h3>
+                      <p className="text-accent-primary text-sm font-bold mb-4">{mentor.role} • ⭐ {mentor.rating}</p>
+                      <div className="flex flex-wrap justify-center gap-2 mb-6">
+                        {mentor.tags.map(t => <span key={t} className="text-[10px] px-2 py-1 bg-white/5 rounded-md border border-white/10">{t}</span>)}
+                      </div>
+                      <button className="btn btn-secondary w-full">Request Mentorship</button>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
           </AnimatePresence>
         </main>
       </div>
@@ -464,14 +606,20 @@ function App() {
   return (
     <div className="min-h-screen relative overflow-x-hidden">
       <div className="bg-mesh"></div>
+      <div className="bg-noise"></div>
       <AnimatePresence mode="wait">
+        {view === 'login' && (
+          <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}>
+            <LoginView />
+          </motion.div>
+        )}
         {view === 'onboarding' && (
-          <motion.div key="onboarding" exit={{ x: -20, opacity: 0 }} transition={{ duration: 0.5 }}>
+          <motion.div key="onboarding" initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -50, opacity: 0 }}>
             <OnboardingView />
           </motion.div>
         )}
         {view === 'assessment' && (
-          <motion.div key="assessment" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
+          <motion.div key="assessment" initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
             <AssessmentView />
           </motion.div>
         )}
