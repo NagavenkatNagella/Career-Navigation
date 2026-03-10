@@ -323,70 +323,82 @@ function SplashScreen() {
           }}
         />
 
-        {/* Center Logo with Zoom, Flow & Animated Frame */}
-        <div style={{ position: 'relative', width: 'fit-content', margin: '0 auto', padding: 'clamp(20px, 5vw, 40px)' }}>
-          {/* Unique Futuristic Frame */}
-          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-            {/* Corners */}
-            {[0, 90, 180, 270].map((rot) => (
-              <motion.div
-                key={rot}
-                initial={{ opacity: 0, scale: 1.5 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 1.5, delay: 0.2 + rot / 360 }}
-                style={{
-                  position: 'absolute',
-                  width: 'clamp(30px, 8vw, 60px)',
-                  height: 'clamp(30px, 8vw, 60px)',
-                  borderTop: '3px solid var(--accent-1)',
-                  borderLeft: '3px solid var(--accent-1)',
-                  top: rot === 0 || rot === 90 ? 0 : 'auto',
-                  bottom: rot === 180 || rot === 270 ? 0 : 'auto',
-                  left: rot === 0 || rot === 270 ? 0 : 'auto',
-                  right: rot === 90 || rot === 180 ? 0 : 'auto',
-                  transform: `rotate(${rot}deg)`,
-                  filter: 'drop-shadow(0 0 8px var(--accent-1))',
-                  borderRadius: '4px 0 0 0'
-                }}
-              >
-                <motion.div 
-                  animate={{ opacity: [0.4, 1, 0.4] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  style={{ position: 'absolute', top: -10, left: 10, width: 4, height: 4, background: 'var(--accent-1)', borderRadius: '50%' }}
-                />
-              </motion.div>
-            ))}
-
-            {/* Pulsing Outer Ring */}
-            <motion.div
-              animate={{ 
-                scale: [1, 1.05, 1],
-                opacity: [0.2, 0.4, 0.2],
-              }}
-              transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-              style={{
-                position: 'absolute',
-                inset: '-5%',
-                border: '1px double rgba(56,189,248,0.2)',
-                borderRadius: '20px',
-                zIndex: -1
-              }}
-            />
+        {/* Center Logo with Hex-Core HUD Frame */}
+        <div style={{ position: 'relative', width: 'fit-content', margin: '0 auto', padding: 'clamp(40px, 8vw, 80px)' }}>
+          {/* Unique Hexagonal Frame Architecture */}
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             
-            {/* Rotating Data HUD Elements */}
+            {/* Outer Hexagon (Rotating) */}
             <motion.div
               animate={{ rotate: 360 }}
-              transition={{ duration: 40, repeat: Infinity, ease: 'linear' }}
+              transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
               style={{
                 position: 'absolute',
-                inset: '-15%',
-                border: '1px dashed rgba(124,58,237,0.1)',
-                borderRadius: '50%',
+                width: '115%',
+                height: '115%',
+                border: '1px solid rgba(56,189,248,0.15)',
+                clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)',
                 zIndex: -2
               }}
             />
+
+            {/* Inner Hexagon (Inverse Rotation & Pulse) */}
+            <motion.div
+              animate={{ rotate: -360, scale: [1, 1.03, 1] }}
+              transition={{ rotate: { duration: 25, repeat: Infinity, ease: 'linear' }, scale: { duration: 4, repeat: Infinity, ease: 'easeInOut' } }}
+              style={{
+                position: 'absolute',
+                width: '105%',
+                height: '105%',
+                border: '2px dashed rgba(124,58,237,0.2)',
+                clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)',
+                zIndex: -1
+              }}
+            />
+
+            {/* Geometric Corner Shards */}
+            {[0, 60, 120, 180, 240, 300].map((angle) => (
+              <motion.div
+                key={angle}
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 1, delay: 0.5 + angle / 600 }}
+                style={{
+                  position: 'absolute',
+                  width: 'clamp(20px, 5vw, 40px)',
+                  height: 'clamp(2px, 0.5vw, 4px)',
+                  background: 'var(--accent-1)',
+                  boxShadow: '0 0 15px var(--accent-1)',
+                  transform: `rotate(${angle}deg) translate(clamp(140px, 22vw, 280px))`,
+                  borderRadius: 2
+                }}
+              />
+            ))}
+
+            {/* Perimeter Light Streak (Circular Path) */}
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+              style={{
+                position: 'absolute',
+                width: '130%',
+                height: '130%',
+                zIndex: 1
+              }}
+            >
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                left: '-2px',
+                width: '4px',
+                height: '60px',
+                background: 'linear-gradient(to bottom, transparent, var(--accent-1), transparent)',
+                filter: 'drop-shadow(0 0 10px var(--accent-1))',
+              }} />
+            </motion.div>
           </div>
 
+          {/* Logo Content */}
           <motion.div
             animate={{ 
               scale: [1, 1.02, 1],
@@ -403,7 +415,7 @@ function SplashScreen() {
               src="/logo.png" 
               alt="SkillBridge Logo" 
               style={{ 
-                width: 'clamp(260px, 40vw, 480px)', 
+                width: 'clamp(240px, 35vw, 440px)', 
                 height: 'auto', 
                 display: 'block' 
               }} 
