@@ -36,7 +36,7 @@ import {
   CartesianGrid,
   Cell
 } from 'recharts';
-import { CareerPathType, UserProfile } from './types';
+import type { CareerPathType, UserProfile } from './types';
 import { CAREER_PATHS, QUESTIONS_BY_PATH, ROADMAPS, INDUSTRY_TRENDS } from './data/careerData';
 import './index.css';
 

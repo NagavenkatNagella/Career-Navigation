@@ -1,4 +1,4 @@
-import { CareerPathType, AssessmentQuestion, RoadmapStep } from './types';
+import type { CareerPathType, AssessmentQuestion, RoadmapStep } from "../types";
 
 export const CAREER_PATHS: Record<CareerPathType, { label: string, description: string }> = {
     'software-dev': {
