@@ -6,7 +6,8 @@ import {
   Award, Globe, Rocket, ShieldCheck, Cloud, Briefcase,
   Star, BarChart3, Lock, Menu, X, RefreshCw, User,
   FilePlus, Image, MessageSquare, Send, Trash2, Ban,
-  FileUp, Paperclip, Heart, MessageCircle, MoreVertical
+  FileUp, Paperclip, Heart, MessageCircle, MoreVertical,
+  Video, PhoneOff, Mic, MicOff, VideoOff, Monitor
 } from 'lucide-react';
 import {
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis,
@@ -2453,6 +2454,7 @@ function ChatTab({ user, role }: { user: UserProfile, role: 'user' | 'mentor' })
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
+  const [videoActive, setVideoActive] = useState(false);
 
   // Fetch connected peers
   useEffect(() => {
@@ -2578,9 +2580,49 @@ function ChatTab({ user, role }: { user: UserProfile, role: 'user' | 'mentor' })
                 <div style={{ width:32, height:32, borderRadius:8, background:'var(--accent-1)', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800 }}>{selectedPeer.name[0]}</div>
                 <span style={{ fontWeight:800 }}>{selectedPeer.name}</span>
               </div>
-              <span className="badge badge-green" style={{ fontSize:'0.65rem' }}>Active Session</span>
+              <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
+                <button 
+                  onClick={() => setVideoActive(true)}
+                  className="btn btn-ghost" 
+                  style={{ padding:8, background: videoActive ? 'rgba(16,185,129,0.1)' : 'transparent', color: videoActive ? '#10b981' : 'var(--text-muted)' }}
+                  title="Start Video Consultation"
+                >
+                  <Video size={20} />
+                </button>
+                <span className="badge badge-green" style={{ fontSize:'0.65rem' }}>Active Session</span>
+              </div>
             </div>
-            <div style={{ flex:1, padding:'1.5rem', overflowY:'auto', display:'flex', flexDirection:'column', gap:'1rem' }}>
+            
+            <div style={{ flex:1, position:'relative', overflow:'hidden', display:'flex', flexDirection:'column' }}>
+              {videoActive && (
+                <motion.div 
+                  initial={{ opacity:0, scale:0.95 }} 
+                  animate={{ opacity:1, scale:1 }}
+                  style={{ 
+                    position:'absolute', top:0, left:0, right:0, bottom:0, 
+                    zIndex:10, background:'var(--bg-card)', padding:'1rem' 
+                  }}
+                >
+                  <div style={{ height:'100%', borderRadius:20, overflow:'hidden', background:'#000', position:'relative' }}>
+                    <iframe 
+                      src={`https://meet.jit.si/${[auth.currentUser?.uid, selectedPeer.id].sort().join('-')}#config.prejoinPageEnabled=false&config.startWithAudioMuted=true&config.startWithVideoMuted=false`}
+                      allow="camera; microphone; fullscreen; display-capture; autoplay"
+                      style={{ width:'100%', height:'100%', border:'none' }}
+                    />
+                    <div style={{ position:'absolute', bottom:'2rem', left:'50%', transform:'translateX(-50%)', display:'flex', gap:'1rem' }}>
+                      <button 
+                        onClick={() => setVideoActive(false)}
+                        style={{ width:54, height:54, borderRadius:'50%', background:'#ef4444', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', border:'none', cursor:'pointer', boxShadow:'0 10px 25px rgba(239, 68, 68, 0.4)' }}
+                        title="End Call"
+                      >
+                        <PhoneOff size={24} />
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              <div style={{ flex:1, padding:'1.5rem', overflowY:'auto', display:'flex', flexDirection:'column', gap:'1rem' }}>
               {messages.map(m => (
                 <div key={m.id} style={{ 
                   alignSelf: m.senderId === auth.currentUser?.uid ? 'flex-end' : 'flex-start',
@@ -2606,7 +2648,8 @@ function ChatTab({ user, role }: { user: UserProfile, role: 'user' | 'mentor' })
               ))}
               {messages.length === 0 && <div style={{ textAlign:'center', margin:'auto', color:'var(--text-muted)' }}>Send a message to start the conversation!</div>}
             </div>
-            <div style={{ padding:'1rem 1.5rem', borderTop:'1px solid var(--border-subtle)', display:'flex', gap:'0.75rem', alignItems:'center' }}>
+          </div>
+          <div style={{ padding:'1rem 1.5rem', borderTop:'1px solid var(--border-subtle)', display:'flex', gap:'0.75rem', alignItems:'center' }}>
               <label style={{ width:42, height:42, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(255,255,255,0.03)', borderRadius:12, cursor:'pointer', border:'1px solid var(--border-subtle)' }} title="Attach File">
                 <input type="file" style={{ display:'none' }} onChange={e => {
                   const file = e.target.files?.[0];
